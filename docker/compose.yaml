@@ -1,0 +1,45 @@
+name: karma8-storage
+
+services:
+
+  ingestor:
+    build:
+      context: ../
+      dockerfile: ingestor/Dockerfile
+    image: karma8-storage/ingestor
+    container_name: karma8-storage-ingestor
+    networks:
+      - karma8
+    ports:
+      - "7788:7788"
+    environment:
+      INGESTOR_SERVICE_ADDR: "0.0.0.0"
+      INGESTOR_SERVICE_PORT: 7788
+      INGESTOR_SERVICE_SHARDS_TOPOLOGY_CONFIG: "./topology.config"
+
+  shard-manager:
+    build: 
+      context: ../
+      dockerfile: shard-manager/Dockerfile
+    image: karma8-storage/shard-manager
+    networks:
+      - karma8
+    ports:
+      - "7700-7707:7799"
+    environment:
+      SHARD_MANAGER_SERVICE_ADDR: "0.0.0.0"
+      SHARD_MANAGER_SERVICE_PORT: 7799
+      REPLICAS_BASE_PATH: "/media/karma8"
+      REPLICAS_INDEX: '{{.Task.Slot}}'
+      REPLICAS_PATHS: "r1;r2;r3"
+    volumes:
+      - /tmp/karma8:/media/karma8
+    deploy:
+      mode: replicated
+      replicas: 8
+
+
+networks:
+
+  karma8:
+    driver: bridge
