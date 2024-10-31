@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"os/signal"
@@ -53,10 +54,53 @@ func process(ingestorRequest *ingestorApi.IngestorRequest) (*ingestorApi.Ingesto
 	return response, ErrUnknownOpts
 }
 
+func doStream(w http.ResponseWriter, r *http.Request) {
+	bytesBuffer := make([]byte, 16*1024)
+
+	for {
+		n, err := r.Body.Read(bytesBuffer)
+		if err != nil {
+			break
+		}
+
+		logs.MainLogger.Println(n)
+	}
+}
+
+func doMultipart(w http.ResponseWriter, r *http.Request) {
+	partReader := multipart.NewReader(r.Body, "bla-bla-bla")
+
+	buf := make([]byte, 16*1024)
+
+	for {
+		part, err := partReader.NextPart()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			logs.MainLogger.Println(err)
+			break
+		}
+
+		for {
+			n, err := part.Read(buf)
+			if err == io.EOF {
+				break
+			}
+			fmt.Println(n)
+		}
+	}
+}
+
 func do(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("do request...")
 
-	serviceRequestBody, err := io.ReadAll(r.Body)
+	reader := io.LimitReader(r.Body, 10*1024*1024)
+
+	serviceRequestBody := make([]byte, 10*1024*1024)
+
+	n, err := reader.Read(serviceRequestBody)
 	if err != nil {
 		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't read service request")
 		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
@@ -65,9 +109,10 @@ func do(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var ingestorRequest ingestorApi.IngestorRequest
+	fmt.Println(n)
 
-	err = json.Unmarshal(serviceRequestBody, &ingestorRequest)
+	var ingestorRequest ingestorApi.IngestorRequest
+	err = json.Unmarshal(serviceRequestBody[0:n], &ingestorRequest)
 	if err != nil {
 		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't unmarshal service request")
 		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
@@ -107,6 +152,10 @@ func runRestServer() {
 	router := chi.NewRouter()
 
 	router.Post("/ingestor", do)
+
+	router.Post("/ingestor/multipart", doMultipart)
+
+	router.Post("/ingestor/stream", doStream)
 
 	rest.NewHttpServer(
 		fmt.Sprintf("%s:%s", targetServiceAddr, targetServicePort),

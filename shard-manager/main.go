@@ -109,7 +109,11 @@ func process(shardManagerRequest *shardManagerApi.ShardManagerRequest) (*shardMa
 func do(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("do request...", r)
 
-	serviceRequestBody, err := io.ReadAll(r.Body)
+	reader := io.LimitReader(r.Body, 10*1024*1024)
+
+	serviceRequestBody := make([]byte, 10*1024*1024)
+
+	n, err := reader.Read(serviceRequestBody)
 	if err != nil {
 		w.Header().Add("X-Karma8-Shard-Manager-Service-Error", "can't read service request")
 		w.Header().Add("X-Karma8-Shard-Manager-Service-Error-Content", err.Error())
@@ -118,9 +122,11 @@ func do(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println(n)
+
 	var shardManagerRequest shardManagerApi.ShardManagerRequest
 
-	err = json.Unmarshal(serviceRequestBody, &shardManagerRequest)
+	err = json.Unmarshal(serviceRequestBody[0:n], &shardManagerRequest)
 	if err != nil {
 		w.Header().Add("X-Karma8-Shard-Manager-Service-Error", "can't unmarshal service request")
 		w.Header().Add("X-Karma8-Shard-Manager-Service-Error-Content", err.Error())
