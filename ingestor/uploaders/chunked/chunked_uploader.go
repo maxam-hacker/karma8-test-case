@@ -6,8 +6,8 @@ import (
 	"karma8-storage/internals/types"
 )
 
-func UploadOneChunk(chunk *ingestorApi.Chunk) error {
-	return shards.UploadPartPacket(&types.PartPacket{
+func UploadChunk(chunk *ingestorApi.Chunk) error {
+	return shards.UploadChunk(&types.PartPacket{
 		Bucket:          chunk.Bucket,
 		Key:             chunk.Key,
 		Data:            chunk.Data,

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,7 +23,40 @@ var (
 	ErrUnknownOpts = errors.New("unknown request options")
 )
 
-func process(ingestorRequest *ingestorApi.IngestorRequest) (*ingestorApi.IngestorResponse, error) {
+func doStream(w http.ResponseWriter, r *http.Request) {
+	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
+	objectKey := r.Header.Get("X-Karma8-Object-Key")
+
+	logs.MainLogger.Println("uploading object...")
+	logs.MainLogger.Println("bucket:", objectBucket)
+	logs.MainLogger.Println("key", objectKey)
+
+	bytesBuffer := make([]byte, 16*1024)
+
+	totalSize := 0
+	doRead := true
+
+	for doRead {
+		n, err := r.Body.Read(bytesBuffer)
+		if err != nil {
+			if err == io.EOF {
+				doRead = false
+			} else {
+				w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
+				w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+				w.WriteHeader(200)
+				logs.MainLogger.Println(err)
+				return
+			}
+		}
+
+		totalSize += n
+	}
+
+	logs.MainLogger.Println(totalSize)
+}
+
+func processChunk(ingestorRequest *ingestorApi.IngestorRequest) (*ingestorApi.IngestorResponse, error) {
 	logs.MainLogger.Println("process request...")
 
 	response := &ingestorApi.IngestorResponse{}
@@ -37,7 +69,7 @@ func process(ingestorRequest *ingestorApi.IngestorRequest) (*ingestorApi.Ingesto
 	if !ingestorRequest.UploadChankedOpts.IsEmpty() {
 		logs.MainLogger.Println("chanked uploading...")
 
-		err := chunked.UploadOneChunk(&ingestorRequest.UploadChankedOpts.Chunk)
+		err := chunked.UploadChunk(&ingestorRequest.UploadChankedOpts.Chunk)
 		if err != nil {
 			logs.MainLogger.Println(err)
 			response.Status = "error"
@@ -54,51 +86,12 @@ func process(ingestorRequest *ingestorApi.IngestorRequest) (*ingestorApi.Ingesto
 	return response, ErrUnknownOpts
 }
 
-func doStream(w http.ResponseWriter, r *http.Request) {
-	bytesBuffer := make([]byte, 16*1024)
+func doChunk(w http.ResponseWriter, r *http.Request) {
+	logs.MainLogger.Println("uploading chunk...")
 
-	for {
-		n, err := r.Body.Read(bytesBuffer)
-		if err != nil {
-			break
-		}
+	reader := io.LimitReader(r.Body, 16*1024)
 
-		logs.MainLogger.Println(n)
-	}
-}
-
-func doMultipart(w http.ResponseWriter, r *http.Request) {
-	partReader := multipart.NewReader(r.Body, "bla-bla-bla")
-
-	buf := make([]byte, 16*1024)
-
-	for {
-		part, err := partReader.NextPart()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			logs.MainLogger.Println(err)
-			break
-		}
-
-		for {
-			n, err := part.Read(buf)
-			if err == io.EOF {
-				break
-			}
-			fmt.Println(n)
-		}
-	}
-}
-
-func do(w http.ResponseWriter, r *http.Request) {
-	logs.MainLogger.Println("do request...")
-
-	reader := io.LimitReader(r.Body, 10*1024*1024)
-
-	serviceRequestBody := make([]byte, 10*1024*1024)
+	serviceRequestBody := make([]byte, 16*1024)
 
 	n, err := reader.Read(serviceRequestBody)
 	if err != nil {
@@ -108,8 +101,6 @@ func do(w http.ResponseWriter, r *http.Request) {
 		logs.MainLogger.Println(err)
 		return
 	}
-
-	fmt.Println(n)
 
 	var ingestorRequest ingestorApi.IngestorRequest
 	err = json.Unmarshal(serviceRequestBody[0:n], &ingestorRequest)
@@ -121,7 +112,7 @@ func do(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ingestorResponse, err := process(&ingestorRequest)
+	ingestorResponse, err := processChunk(&ingestorRequest)
 	if err != nil {
 		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't process request")
 		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
@@ -151,9 +142,7 @@ func runRestServer() {
 
 	router := chi.NewRouter()
 
-	router.Post("/ingestor", do)
-
-	router.Post("/ingestor/multipart", doMultipart)
+	router.Post("/ingestor/chunk", doChunk)
 
 	router.Post("/ingestor/stream", doStream)
 

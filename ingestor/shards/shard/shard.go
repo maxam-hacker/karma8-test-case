@@ -31,15 +31,15 @@ func New(opts ShardOptions) *Shard {
 	return shard
 }
 
-func (shard *Shard) IngestPacket(packet *internalTypes.PartPacket) error {
-	return shard.uploadPartPacket(packet)
+func (shard *Shard) IngestChunk(packet *internalTypes.PartPacket) error {
+	return shard.uploadChunk(packet)
 }
 
-func (shard *Shard) SpitOutPacket(bucket string, key string, offset uint64, opts internalTypes.PartPacketOptions) *internalTypes.PartPacket {
+func (shard *Shard) SpitOutChunk(bucket string, key string, offset uint64, opts internalTypes.PartPacketOptions) *internalTypes.PartPacket {
 	return nil
 }
 
-func (shard *Shard) uploadPartPacket(packet *internalTypes.PartPacket) error {
+func (shard *Shard) uploadChunk(packet *internalTypes.PartPacket) error {
 	shardManagerUploadRequest := shardManagerApi.ShardManagerRequest{
 		UploadOpts: shardManagerApi.UploadOptions{
 			Packets: []shardManagerApi.PartPacket{
@@ -62,7 +62,7 @@ func (shard *Shard) uploadPartPacket(packet *internalTypes.PartPacket) error {
 		return err
 	}
 
-	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager", shard.Opts.IP, shard.Opts.Port)
+	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager/chunk", shard.Opts.IP, shard.Opts.Port)
 
 	shardResponse, err := shard.Client.Post(shardUrl, "application/json", requestReader)
 	if err != nil {

@@ -64,6 +64,8 @@ func SendByStream() {
 		return
 	}
 	request.Header.Set("Content-Type", "application/octet-stream")
+	request.Header.Set("X-Karma8-Object-Bucket", "test-bucket")
+	request.Header.Set("X-Karma8-Object-Key", testFilePath)
 
 	response, err := httpClient.Do(request)
 	if err != nil {
@@ -180,7 +182,7 @@ func SendByChunks() {
 
 		fmt.Println(len(requestReader.RequestBytes))
 
-		req, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor", requestReader)
+		req, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor/chunk", requestReader)
 		if err != nil {
 			fmt.Println(err)
 			return
