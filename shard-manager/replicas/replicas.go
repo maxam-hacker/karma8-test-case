@@ -66,23 +66,24 @@ func New(replicaPath string) (*replica.ShardReplica, error) {
 	return replica, nil
 }
 
-func WritePacket(packet *internalTypes.PartPacket) error {
+func WriteObjectPart(objectPart internalTypes.ObjectPart) error {
 	for _, replica := range replicas {
-		replica.WritePacket(packet)
+		replica.WriteObjectPart(objectPart)
 	}
 
 	return nil
 }
 
-func ReadPacket(objectBucket string, objectKey string, objectOffset uint64) (*internalTypes.PartPacket, error) {
-	for _, replica := range replicas {
-		packet, err := replica.ReadPacket(objectBucket, objectKey, objectOffset)
-		if err != nil {
-			logs.ReplicasLogger.Println(err)
-			continue
+func ReadPacket(objectBucket string, objectKey string, objectOffset uint64) (*internalTypes.ObjectPart, error) {
+	/*
+		for _, replica := range replicas {
+			packet, err := replica.ReadPacket(objectBucket, objectKey, objectOffset)
+			if err != nil {
+				logs.ReplicasLogger.Println(err)
+				continue
+			}
+			return packet, nil
 		}
-		return packet, nil
-	}
-
+	*/
 	return nil, ErrReadingError
 }

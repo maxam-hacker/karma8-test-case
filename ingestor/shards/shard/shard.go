@@ -1,11 +1,11 @@
 package shard
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
+	"strconv"
 
-	shardManagerApi "karma8-storage/api/shard-manager"
-	"karma8-storage/ingestor/logs"
 	internalTypes "karma8-storage/internals/types"
 )
 
@@ -31,55 +31,38 @@ func New(opts ShardOptions) *Shard {
 	return shard
 }
 
-func (shard *Shard) IngestChunk(packet *internalTypes.PartPacket) error {
-	return shard.uploadChunk(packet)
+func (shard *Shard) IngestObjectPart(objectPart internalTypes.ObjectPart) error {
+	return shard.uploadPart(objectPart)
 }
 
-func (shard *Shard) SpitOutChunk(bucket string, key string, offset uint64, opts internalTypes.PartPacketOptions) *internalTypes.PartPacket {
-	return nil
+func (shard *Shard) SpitOutPart(bucket string, key string, offset uint64, opts internalTypes.ObjectPartOptions) (*internalTypes.ObjectPart, error) {
+	return nil, nil
 }
 
-func (shard *Shard) uploadChunk(packet *internalTypes.PartPacket) error {
-	shardManagerUploadRequest := shardManagerApi.ShardManagerRequest{
-		UploadOpts: shardManagerApi.UploadOptions{
-			Packets: []shardManagerApi.PartPacket{
-				{
-					Bucket:          packet.Bucket,
-					Key:             packet.Key,
-					Data:            packet.Data,
-					Offset:          packet.Offset,
-					PacketSize:      packet.PacketSize,
-					TotalObjectSize: packet.TotalObjectSize,
-				},
-			},
-		},
-		DownloadOpts: shardManagerApi.DownloadOptions{},
-	}
+func (shard *Shard) uploadPart(objectPart internalTypes.ObjectPart) error {
+	httpClient := &http.Client{}
 
-	requestReader, err := shardManagerUploadRequest.NewReader()
+	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager/object/part/upload", shard.Opts.IP, shard.Opts.Port)
+
+	request, err := http.NewRequest("POST", shardUrl, bytes.NewReader(*objectPart.Data))
 	if err != nil {
-		logs.ShardLogger.Println(err)
+		fmt.Println(err)
+		return err
+	}
+	request.Header.Set("Content-Type", "application/octet-stream")
+	request.Header.Set("X-Karma8-Object-Bucket", objectPart.Bucket)
+	request.Header.Set("X-Karma8-Object-Key", objectPart.Key)
+	request.Header.Set("X-Karma8-Object-Part-Data-Size", strconv.Itoa(int(objectPart.PartDataSize)))
+	request.Header.Set("X-Karma8-Object-Total-Offset", strconv.Itoa(int(objectPart.TotalObjectOffset)))
+	request.Header.Set("X-Karma8-Object-Total-Size", strconv.Itoa(int(objectPart.TotalObjectSize)))
+
+	response, err := httpClient.Do(request)
+	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 
-	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager/chunk", shard.Opts.IP, shard.Opts.Port)
-
-	shardResponse, err := shard.Client.Post(shardUrl, "application/json", requestReader)
-	if err != nil {
-		logs.ShardLogger.Println(err)
-		return err
-	}
-
-	shardResponseBytes := make([]byte, 10*1024)
-
-	n, err := shardResponse.Body.Read(shardResponseBytes)
-	if err != nil {
-		logs.ShardLogger.Println(err)
-		return err
-	}
-
-	shardUploadResponse := shardManagerApi.ShardManagerResponse{}
-	shardUploadResponse.FromBytes(shardResponseBytes[0:n])
+	fmt.Println(shard, response.StatusCode)
 
 	return nil
 }

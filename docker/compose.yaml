@@ -29,7 +29,7 @@ services:
     environment:
       SHARD_MANAGER_SERVICE_ADDR: "0.0.0.0"
       SHARD_MANAGER_SERVICE_PORT: 7799
-      REPLICAS_BASE_PATH: "/media/karma8"
+      REPLICAS_BASE_PATH: "/media/karma8/replicas/"
       REPLICAS_INDEX: '{{.Task.Slot}}'
       REPLICAS_PATHS: "r1;r2;r3"
     volumes:

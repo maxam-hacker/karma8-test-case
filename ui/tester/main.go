@@ -4,68 +4,60 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path"
-
-	ingestorApi "karma8-storage/api/ingestor"
+	"strconv"
 )
 
 var (
 	testDataDir = "/tmp/karma8/test-data"
-
-	dataBuffer = make([]byte, 10*1024*1024)
 )
 
 func main() {
-	transferType := flag.String("transfer", "stream", "how to transfer target file")
-	operationType := flag.String("operation", "upload", "upload or download file")
-	//targetFileName := flag.String("file", "test1.data", "upload or download file")
-	fakeFile := flag.String("fakeFile", "none", "create fake data file")
+	operation := flag.String("operation", "upload", "upload or download file")
+	bucketName := flag.String("bucket", "/tmp", "upload or download file")
+	objectKey := flag.String("objectKey", "/karma8/test-data/test1.data", "create fake data file")
 
-	if *fakeFile != "none" {
-		CreateFakeFiles()
-	}
+	CreateFakeFiles()
 
-	if *operationType == "upload" {
-		switch *transferType {
-		case "stream":
-			SendByStream()
-		case "chunks":
-			SendByChunks()
-		case "multipart":
-			SendByMultiPart()
-		}
+	switch *operation {
+	case "upload":
+		UploadFile(*bucketName, *objectKey)
+	case "download":
+		DownloadFile(path.Join(*bucketName, *objectKey))
 	}
 }
 
-func SendByStream() {
+func DownloadFile(fileName string) {
+}
+
+func UploadFile(bucket string, objectKey string) {
+	fileNamePath := path.Join(bucket, objectKey)
+
 	httpClient := &http.Client{}
 
-	testFilePath := path.Join(testDataDir, "test1.data")
-
-	_, err := os.Stat(testFilePath)
+	testFileInfo, err := os.Stat(fileNamePath)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	testFileBytes, err := os.ReadFile(testFilePath)
+	testFileBytes, err := os.ReadFile(fileNamePath)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	request, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor/stream", bytes.NewReader(testFileBytes))
+	request, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor/file/upload", bytes.NewReader(testFileBytes))
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	request.Header.Set("Content-Type", "application/octet-stream")
-	request.Header.Set("X-Karma8-Object-Bucket", "test-bucket")
-	request.Header.Set("X-Karma8-Object-Key", testFilePath)
+	request.Header.Set("X-Karma8-Object-Bucket", bucket)
+	request.Header.Set("X-Karma8-Object-Key", objectKey)
+	request.Header.Set("X-Karma8-Object-Total-Size", strconv.Itoa(int(testFileInfo.Size())))
 
 	response, err := httpClient.Do(request)
 	if err != nil {
@@ -74,131 +66,6 @@ func SendByStream() {
 	}
 
 	fmt.Println(response.StatusCode)
-}
-
-func SendByMultiPart() {
-	var b bytes.Buffer
-
-	multiPartWiter := multipart.NewWriter(&b)
-	multiPartWiter.SetBoundary("bla-bla-bla")
-	defer multiPartWiter.Close()
-
-	testFilePath := path.Join(testDataDir, "test1.data")
-
-	_, err := os.Stat(testFilePath)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	testFile, err := os.Open(testFilePath)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	mulipartIOWriter, err := multiPartWiter.CreateFormFile("file", testFile.Name())
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	n, err := io.Copy(mulipartIOWriter, testFile)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(n)
-
-	request, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor/multipart", &b)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	request.Header.Set("Content-Type", multiPartWiter.FormDataContentType())
-
-	httpClient := &http.Client{}
-
-	response, err := httpClient.Do(request)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	fmt.Println(response.StatusCode)
-}
-
-func SendByChunks() {
-	testFilePath := path.Join(testDataDir, "test1.data")
-
-	testFileInfo, err := os.Stat(testFilePath)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	testFile, err := os.Open(testFilePath)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	doRead := true
-
-	offset := uint64(0)
-
-	httpClient := &http.Client{}
-
-	for doRead {
-		n, err := testFile.Read(dataBuffer)
-		if n == 0 {
-			break
-		}
-
-		if err == io.EOF {
-			doRead = false
-		}
-
-		request := ingestorApi.IngestorRequest{
-			UploadOpts: ingestorApi.UploadOptions{},
-			UploadChankedOpts: ingestorApi.UploadChankedOptions{
-				Chunk: ingestorApi.Chunk{
-					Bucket:    "test-6-bucket",
-					Key:       "test-6-key",
-					Offset:    offset,
-					Data:      dataBuffer[0:n],
-					ChunkSize: uint64(n),
-					TotalSize: uint64(testFileInfo.Size()),
-				},
-			},
-		}
-
-		requestReader, err := request.NewReader()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		fmt.Println(len(requestReader.RequestBytes))
-
-		req, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor/chunk", requestReader)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		response, err := httpClient.Do(req)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		fmt.Println(response)
-
-		offset += uint64(n)
-	}
 }
 
 func CreateFakeFiles() error {
