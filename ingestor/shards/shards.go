@@ -65,3 +65,7 @@ func UploadPart(objectPart internalTypes.ObjectPart) error {
 
 	return objectShard.IngestObjectPart(objectPart)
 }
+
+func DownloadPart(bucket string, key string) error {
+	return nil
+}

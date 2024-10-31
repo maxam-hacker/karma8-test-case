@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"karma8-storage/ingestor/logs"
 	internalTypes "karma8-storage/internals/types"
 )
 
@@ -40,13 +41,15 @@ func (shard *Shard) SpitOutPart(bucket string, key string, offset uint64, opts i
 }
 
 func (shard *Shard) uploadPart(objectPart internalTypes.ObjectPart) error {
+	logs.ShardLogger.Println("uploading part...")
+
 	httpClient := &http.Client{}
 
 	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager/object/part/upload", shard.Opts.IP, shard.Opts.Port)
 
 	request, err := http.NewRequest("POST", shardUrl, bytes.NewReader(*objectPart.Data))
 	if err != nil {
-		fmt.Println(err)
+		logs.ShardLogger.Println(err)
 		return err
 	}
 	request.Header.Set("Content-Type", "application/octet-stream")
@@ -58,11 +61,11 @@ func (shard *Shard) uploadPart(objectPart internalTypes.ObjectPart) error {
 
 	response, err := httpClient.Do(request)
 	if err != nil {
-		fmt.Println(err)
+		logs.ShardLogger.Println(err)
 		return err
 	}
 
-	fmt.Println(shard, response.StatusCode)
+	logs.ShardLogger.Println(response.StatusCode)
 
 	return nil
 }

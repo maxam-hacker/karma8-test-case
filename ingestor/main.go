@@ -96,6 +96,17 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func doDownload(w http.ResponseWriter, r *http.Request) {
+	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
+	objectKey := r.Header.Get("X-Karma8-Object-Key")
+
+	logs.MainLogger.Println("downloading object...")
+	logs.MainLogger.Println("bucket:", objectBucket)
+	logs.MainLogger.Println("key", objectKey)
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	for {
+		//w.Write()
+	}
 }
 
 func runRestServer() {
