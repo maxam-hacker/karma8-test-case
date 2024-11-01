@@ -60,13 +60,22 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 
 	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
 	objectKey := r.Header.Get("X-Karma8-Object-Key")
-	totalObjectOffset := r.Header.Get("X-Karma8-Object-Key")
+	totalObjectOffset := r.Header.Get("X-Karma8-Object-Total-Offset")
 
 	logs.MainLogger.Println("download object part...")
 	logs.MainLogger.Println("bucket:", objectBucket)
 	logs.MainLogger.Println("key:", objectKey)
 
-	objectPart, err := replicas.ReadObjectPart(objectBucket, objectKey, totalObjectOffset)
+	offset, err := strconv.ParseUint(totalObjectOffset, 10, 1)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while parsing total object offset")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(200)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectPart, err := replicas.ReadObjectPart(objectBucket, objectKey, offset)
 	if err != nil {
 		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while reading object part")
 		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
@@ -75,7 +84,7 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set()
+	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Write(*objectPart.Data)
 }
 
