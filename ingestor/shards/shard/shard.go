@@ -53,6 +53,7 @@ func (shard *Shard) SpitOutPart(bucket string, key string, offset uint64) (*inte
 
 	request.Header.Set("X-Karma8-Object-Bucket", bucket)
 	request.Header.Set("X-Karma8-Object-Key", key)
+	request.Header.Set("X-Karma8-Object-Total-Offset", strconv.Itoa(int(offset)))
 
 	response, err := httpClient.Do(request)
 	if err != nil {

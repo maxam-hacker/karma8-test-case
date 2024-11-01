@@ -105,6 +105,7 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 
 	parts, err := shards.DownloadPart(objectBucket, objectKey)
 	if err != nil {
+		logs.MainLogger.Println(err)
 		return
 	}
 

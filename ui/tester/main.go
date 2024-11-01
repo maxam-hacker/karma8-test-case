@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -18,18 +19,59 @@ func main() {
 	operation := flag.String("operation", "upload", "upload or download file")
 	bucketName := flag.String("bucket", "/tmp", "upload or download file")
 	objectKey := flag.String("objectKey", "/karma8/test-data/test1.data", "create fake data file")
+	flag.Parse()
 
-	CreateFakeFiles()
+	//CreateFakeFiles()
 
 	switch *operation {
 	case "upload":
 		UploadFile(*bucketName, *objectKey)
 	case "download":
-		DownloadFile(path.Join(*bucketName, *objectKey))
+		DownloadFile(*bucketName, *objectKey)
 	}
 }
 
-func DownloadFile(fileName string) {
+func DownloadFile(bucket string, objectKey string) {
+	httpClient := http.Client{}
+
+	request, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor/file/download", nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	request.Header.Set("X-Karma8-Object-Bucket", bucket)
+	request.Header.Set("X-Karma8-Object-Key", objectKey)
+
+	response, err := httpClient.Do(request)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(response.StatusCode)
+
+	responseBytes := make([]byte, 16*1024)
+
+	doRead := true
+
+	totalSize := 0
+
+	for doRead {
+		n, err := response.Body.Read(responseBytes)
+		if err != nil {
+			if err == io.EOF {
+				doRead = false
+			} else {
+				fmt.Println(err)
+				break
+			}
+		}
+
+		totalSize += n
+	}
+
+	fmt.Println(totalSize)
 }
 
 func UploadFile(bucket string, objectKey string) {
