@@ -2,7 +2,9 @@ package shard
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -37,11 +39,101 @@ func (shard *Shard) IngestObjectPart(objectPart internalTypes.ObjectPart) error 
 }
 
 func (shard *Shard) SpitOutPart(bucket string, key string, offset uint64) (*internalTypes.ObjectPart, error) {
-	return nil, nil
+	logs.ShardLogger.Println("uploading part...")
+
+	httpClient := &http.Client{}
+
+	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager/object/part/download", shard.Opts.IP, shard.Opts.Port)
+
+	request, err := http.NewRequest("POST", shardUrl, nil)
+	if err != nil {
+		logs.ShardLogger.Println(err)
+		return nil, err
+	}
+
+	request.Header.Set("X-Karma8-Object-Bucket", bucket)
+	request.Header.Set("X-Karma8-Object-Key", key)
+
+	response, err := httpClient.Do(request)
+	if err != nil {
+		logs.ShardLogger.Println(err)
+		return nil, err
+	}
+
+	objectPart := &internalTypes.ObjectPart{
+		Bucket: bucket,
+		Data:   &[]byte{},
+	}
+
+	responseBytes := make([]byte, 16*1024)
+
+	doRead := true
+
+	for doRead {
+		n, err := response.Body.Read(responseBytes)
+		if err != nil {
+			if err != io.EOF {
+				logs.ShardLogger.Println(err)
+				break
+			} else {
+				doRead = false
+			}
+		}
+
+		*objectPart.Data = append(*objectPart.Data, responseBytes[0:n]...)
+	}
+
+	logs.ShardLogger.Println(response.StatusCode)
+
+	return objectPart, nil
 }
 
-func (shard *Shard) SpitOutPartsMeta(bucket string, key string) ([]*internalTypes.ObjectPartMeta, error) {
-	return nil, nil
+func (shard *Shard) SpitOutObjectMeta(bucket string, key string) ([]*internalTypes.ObjectPartMeta, error) {
+	logs.ShardLogger.Println("object meta...")
+
+	httpClient := &http.Client{}
+
+	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager/object/meta", shard.Opts.IP, shard.Opts.Port)
+
+	request, err := http.NewRequest("POST", shardUrl, nil)
+	if err != nil {
+		logs.ShardLogger.Println(err)
+		return nil, err
+	}
+	request.Header.Set("X-Karma8-Object-Bucket", bucket)
+	request.Header.Set("X-Karma8-Object-Key", key)
+
+	response, err := httpClient.Do(request)
+	if err != nil {
+		logs.ShardLogger.Println(err)
+		return nil, err
+	}
+
+	logs.ShardLogger.Println(response.StatusCode)
+
+	if response.StatusCode != 200 {
+		return nil, nil
+	}
+
+	responseBytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		logs.ShardLogger.Println(err)
+		return nil, nil
+	}
+
+	partsMeta := make([]*internalTypes.ObjectPartMeta, 0)
+
+	err = json.Unmarshal(responseBytes, &partsMeta)
+	if err != nil {
+		logs.ShardLogger.Println(err)
+		return nil, nil
+	}
+
+	for _, objectPartMeta := range partsMeta {
+		objectPartMeta.Arg0 = shard
+	}
+
+	return partsMeta, nil
 }
 
 func (shard *Shard) uploadPart(objectPart internalTypes.ObjectPart) error {

@@ -101,11 +101,17 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 
 	logs.MainLogger.Println("downloading object...")
 	logs.MainLogger.Println("bucket:", objectBucket)
-	logs.MainLogger.Println("keyЖ", objectKey)
+	logs.MainLogger.Println("key:", objectKey)
+
+	parts, err := shards.DownloadPart(objectBucket, objectKey)
+	if err != nil {
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
-	for {
-		w.Write()
+
+	for part := range parts {
+		w.Write(*part.Data)
 	}
 }
 
