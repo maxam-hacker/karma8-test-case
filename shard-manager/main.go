@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -22,8 +23,60 @@ var (
 	ErrUnknownOpts = errors.New("unknown request options")
 )
 
+func doMeta(w http.ResponseWriter, r *http.Request) {
+	logs.MainLogger.Println("do meta request...")
+
+	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
+	objectKey := r.Header.Get("X-Karma8-Object-Key")
+
+	logs.MainLogger.Println("meta for object...")
+	logs.MainLogger.Println("bucket:", objectBucket)
+	logs.MainLogger.Println("key:", objectKey)
+
+	partsMeta, err := replicas.ReadObjectPartsMeta(objectBucket, objectKey)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while reading object parts meta")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(200)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	partsMetaBytes, err := json.Marshal(partsMeta)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while marshal object parts meta")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(200)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	w.Header().Add("Content-Type", "text/json")
+	w.Write(partsMetaBytes)
+}
+
 func doDownload(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("do download request...")
+
+	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
+	objectKey := r.Header.Get("X-Karma8-Object-Key")
+	totalObjectOffset := r.Header.Get("X-Karma8-Object-Key")
+
+	logs.MainLogger.Println("download object part...")
+	logs.MainLogger.Println("bucket:", objectBucket)
+	logs.MainLogger.Println("key:", objectKey)
+
+	objectPart, err := replicas.ReadObjectPart(objectBucket, objectKey, totalObjectOffset)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while reading object part")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(200)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	w.Header().Set()
+	w.Write(*objectPart.Data)
 }
 
 func doUpload(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +148,7 @@ func runRestServer() {
 
 	router.Post("/shard-manager/object/part/upload", doUpload)
 	router.Post("/shard-manager/object/part/download", doDownload)
+	router.Post("/shard-manager/object/meta", doMeta)
 
 	rest.NewHttpServer(
 		fmt.Sprintf("%s:%s", targetServiceAddr, targetServicePort),

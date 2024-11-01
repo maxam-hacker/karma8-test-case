@@ -36,7 +36,11 @@ func (shard *Shard) IngestObjectPart(objectPart internalTypes.ObjectPart) error 
 	return shard.uploadPart(objectPart)
 }
 
-func (shard *Shard) SpitOutPart(bucket string, key string, offset uint64, opts internalTypes.ObjectPartOptions) (*internalTypes.ObjectPart, error) {
+func (shard *Shard) SpitOutPart(bucket string, key string, offset uint64) (*internalTypes.ObjectPart, error) {
+	return nil, nil
+}
+
+func (shard *Shard) SpitOutPartsMeta(bucket string, key string) ([]*internalTypes.ObjectPartMeta, error) {
 	return nil, nil
 }
 

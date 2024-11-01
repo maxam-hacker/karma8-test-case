@@ -12,8 +12,10 @@ import (
 )
 
 var (
-	ErrWritingError = errors.New("error while writing packet to replica")
-	ErrReadingError = errors.New("error while reading packet from replica")
+	ErrObjectPartWritingError     = errors.New("error while writing object part to replica")
+	ErrObjectPartReadingError     = errors.New("error while reading object part from replica")
+	ErrObjectPartMetaWritingError = errors.New("error while writing object part meta to replica")
+	ErrObjectPartMetaReadingError = errors.New("error while reading object part meta from replica")
 
 	replicas []*replica.ShardReplica
 )
@@ -74,16 +76,28 @@ func WriteObjectPart(objectPart internalTypes.ObjectPart) error {
 	return nil
 }
 
-func ReadPacket(objectBucket string, objectKey string, objectOffset uint64) (*internalTypes.ObjectPart, error) {
-	/*
-		for _, replica := range replicas {
-			packet, err := replica.ReadPacket(objectBucket, objectKey, objectOffset)
-			if err != nil {
-				logs.ReplicasLogger.Println(err)
-				continue
-			}
-			return packet, nil
+func ReadObjectPartsMeta(objectBucket string, objectKey string) ([]*internalTypes.ObjectPartMeta, error) {
+	for _, replica := range replicas {
+		objectPartsMeta, err := replica.ReadObjectPartsMeta(objectBucket, objectKey)
+		if err != nil {
+			logs.ReplicasLogger.Println(err)
+			continue
 		}
-	*/
-	return nil, ErrReadingError
+		return objectPartsMeta, nil
+	}
+
+	return nil, ErrObjectPartMetaReadingError
+}
+
+func ReadObjectPart(objectBucket string, objectKey string, totalObjectOffset uint64) (*internalTypes.ObjectPart, error) {
+	for _, replica := range replicas {
+		objectPart, err := replica.ReadObjectPart(objectBucket, objectKey, totalObjectOffset)
+		if err != nil {
+			logs.ReplicasLogger.Println(err)
+			continue
+		}
+		return objectPart, nil
+	}
+
+	return nil, ErrObjectPartReadingError
 }

@@ -101,11 +101,11 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 
 	logs.MainLogger.Println("downloading object...")
 	logs.MainLogger.Println("bucket:", objectBucket)
-	logs.MainLogger.Println("key", objectKey)
+	logs.MainLogger.Println("keyЖ", objectKey)
 
 	w.Header().Set("Content-Type", "application/octet-stream")
 	for {
-		//w.Write()
+		w.Write()
 	}
 }
 
