@@ -105,7 +105,7 @@ func (replica *ShardReplica) ReadObjectPart(objectBucket string, objectKey strin
 	targetFound := false
 
 	for _, file := range files {
-		fileOffset, err := strconv.ParseUint(file.Name(), 10, 1)
+		fileOffset, err := strconv.ParseUint(file.Name(), 10, 0)
 		if err != nil {
 			logs.ReplicaLogger.Println(err)
 			return nil, err

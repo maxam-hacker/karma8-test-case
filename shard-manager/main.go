@@ -66,7 +66,7 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("bucket:", objectBucket)
 	logs.MainLogger.Println("key:", objectKey)
 
-	offset, err := strconv.ParseUint(totalObjectOffset, 10, 1)
+	offset, err := strconv.ParseUint(totalObjectOffset, 10, 0)
 	if err != nil {
 		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while parsing total object offset")
 		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
@@ -104,7 +104,25 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("total offset", objectTotalOffset)
 	logs.MainLogger.Println("total size", objectTotalSize)
 
-	totalSize, err := strconv.Atoi(objectTotalSize)
+	partSize, err := strconv.ParseUint(objectPartDataSize, 10, 0)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(200)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	totalOffset, err := strconv.ParseUint(objectTotalOffset, 10, 0)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(200)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	totalSize, err := strconv.ParseUint(objectTotalSize, 10, 0)
 	if err != nil {
 		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
 		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
@@ -138,14 +156,19 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	replicas.WriteObjectPart(internalTypes.ObjectPart{
-		Data: &partDataBuffer,
+		Bucket:            objectBucket,
+		Key:               objectKey,
+		Data:              &partDataBuffer,
+		PartDataSize:      partSize,
+		TotalObjectOffset: totalOffset,
+		TotalObjectSize:   totalSize,
 	})
 
 	logs.MainLogger.Println("done", totalSize, totalSizeProcessed)
 }
 
 func runRestServer() {
-	logs.MainLogger.Println("RESR server...")
+	logs.MainLogger.Println("REST server...")
 
 	targetServiceAddr := os.Getenv("SHARD_MANAGER_SERVICE_ADDR")
 	targetServicePort := os.Getenv("SHARD_MANAGER_SERVICE_PORT")
