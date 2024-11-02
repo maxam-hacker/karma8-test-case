@@ -25,7 +25,6 @@ type ObjectPartMeta struct {
 	TotalObjectOffset uint64
 	TotalObjectSize   uint64
 	Opts              ObjectPartOptions
-	Arg0              any
 }
 
 func (part *ObjectPart) GetBytes() ([]byte, error) {

@@ -112,6 +112,11 @@ func (shard *Shard) SpitOutObjectMeta(bucket string, key string) ([]internalType
 		return partsMeta, err
 	}
 
+	if response.Header.Get("X-Karma8-Ingestor-Service-Error") != "" {
+		logs.ShardLogger.Println(response.Header.Get("X-Karma8-Ingestor-Service-Error"))
+		return partsMeta, err
+	}
+
 	responseBytes, err := io.ReadAll(response.Body)
 	if err != nil {
 		logs.ShardLogger.Println(err)
@@ -122,10 +127,6 @@ func (shard *Shard) SpitOutObjectMeta(bucket string, key string) ([]internalType
 	if err != nil {
 		logs.ShardLogger.Println(err)
 		return partsMeta, nil
-	}
-
-	for _, objectPartMeta := range partsMeta {
-		objectPartMeta.Arg0 = shard
 	}
 
 	return partsMeta, nil

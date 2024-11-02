@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 
 	internalTypes "karma8-storage/internals/types"
@@ -95,31 +94,6 @@ func (replica *ShardReplica) ReadObjectPartsMeta(objectBucket string, objectKey 
 
 func (replica *ShardReplica) ReadObjectPart(objectBucket string, objectKey string, totalObjectOffset uint64) (*internalTypes.ObjectPart, error) {
 	pathToKey := replica.getPathToKey(objectBucket, objectKey)
-
-	files, err := os.ReadDir(pathToKey)
-	if err != nil {
-		logs.ReplicaLogger.Println(err)
-		return nil, err
-	}
-
-	targetFound := false
-
-	for _, file := range files {
-		fileOffset, err := strconv.ParseUint(file.Name(), 10, 0)
-		if err != nil {
-			logs.ReplicaLogger.Println(err)
-			return nil, err
-		}
-
-		if fileOffset == totalObjectOffset {
-			targetFound = true
-			break
-		}
-	}
-
-	if !targetFound {
-		return nil, ErrEmptyOffset
-	}
 
 	objectPartBytes, err := os.ReadFile(fmt.Sprintf("%s/%d", pathToKey, totalObjectOffset))
 	if err != nil {

@@ -21,6 +21,11 @@ var (
 	Storage *shardsTopology.Storage
 )
 
+type ShardMap struct {
+	PartMeta internalTypes.ObjectPartMeta
+	Shard    *shard.Shard
+}
+
 func Initialize(shardsConfigFilePath string) {
 	logs.ShardsLogger.Println("initialize topology...")
 
@@ -90,7 +95,7 @@ func DownloadPart(bucket string, key string) (chan *internalTypes.ObjectPart, er
 		return nil, ErrKeyShardTopology
 	}
 
-	allPartsMeta := make([]internalTypes.ObjectPartMeta, 0)
+	shardMap := make([]ShardMap, 0)
 
 	for _, objectShard := range keyShard.ObjectsShards {
 
@@ -99,18 +104,25 @@ func DownloadPart(bucket string, key string) (chan *internalTypes.ObjectPart, er
 			return nil, ErrKeyShardTopology
 		}
 
-		allPartsMeta = append(allPartsMeta, partsMeta...)
+		for _, partMeta := range partsMeta {
+			shardMap = append(shardMap, ShardMap{
+				PartMeta: partMeta,
+				Shard:    objectShard,
+			})
+		}
 	}
 
 	chunks := make(chan *internalTypes.ObjectPart)
 
 	go func() {
-		sort.Slice(allPartsMeta, func(i, j int) bool {
-			return allPartsMeta[i].TotalObjectOffset < allPartsMeta[j].TotalObjectOffset
+		defer close(chunks)
+
+		sort.Slice(shardMap, func(i, j int) bool {
+			return shardMap[i].PartMeta.TotalObjectOffset < shardMap[j].PartMeta.TotalObjectOffset
 		})
 
-		for _, partMeta := range allPartsMeta {
-			part, err := partMeta.Arg0.(*shard.Shard).SpitOutPart(bucket, key, partMeta.TotalObjectOffset)
+		for _, shardMapItem := range shardMap {
+			part, err := shardMapItem.Shard.SpitOutPart(bucket, key, shardMapItem.PartMeta.TotalObjectOffset)
 			if err != nil {
 				logs.ShardsLogger.Println(err)
 				continue
