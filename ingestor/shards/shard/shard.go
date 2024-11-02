@@ -89,8 +89,10 @@ func (shard *Shard) SpitOutPart(bucket string, key string, offset uint64) (*inte
 	return objectPart, nil
 }
 
-func (shard *Shard) SpitOutObjectMeta(bucket string, key string) ([]*internalTypes.ObjectPartMeta, error) {
+func (shard *Shard) SpitOutObjectMeta(bucket string, key string) ([]internalTypes.ObjectPartMeta, error) {
 	logs.ShardLogger.Println("object meta...")
+
+	partsMeta := make([]internalTypes.ObjectPartMeta, 0)
 
 	httpClient := &http.Client{}
 
@@ -99,7 +101,7 @@ func (shard *Shard) SpitOutObjectMeta(bucket string, key string) ([]*internalTyp
 	request, err := http.NewRequest("POST", shardUrl, nil)
 	if err != nil {
 		logs.ShardLogger.Println(err)
-		return nil, err
+		return partsMeta, err
 	}
 	request.Header.Set("X-Karma8-Object-Bucket", bucket)
 	request.Header.Set("X-Karma8-Object-Key", key)
@@ -107,27 +109,19 @@ func (shard *Shard) SpitOutObjectMeta(bucket string, key string) ([]*internalTyp
 	response, err := httpClient.Do(request)
 	if err != nil {
 		logs.ShardLogger.Println(err)
-		return nil, err
-	}
-
-	logs.ShardLogger.Println(response.StatusCode)
-
-	if response.StatusCode != 200 {
-		return nil, nil
+		return partsMeta, err
 	}
 
 	responseBytes, err := io.ReadAll(response.Body)
 	if err != nil {
 		logs.ShardLogger.Println(err)
-		return nil, nil
+		return partsMeta, nil
 	}
-
-	partsMeta := make([]*internalTypes.ObjectPartMeta, 0)
 
 	err = json.Unmarshal(responseBytes, &partsMeta)
 	if err != nil {
 		logs.ShardLogger.Println(err)
-		return nil, nil
+		return partsMeta, nil
 	}
 
 	for _, objectPartMeta := range partsMeta {

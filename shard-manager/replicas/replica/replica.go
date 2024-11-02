@@ -57,7 +57,7 @@ func (replica *ShardReplica) WriteObjectPart(objectPart internalTypes.ObjectPart
 	return nil
 }
 
-func (replica *ShardReplica) ReadObjectPartsMeta(objectBucket string, objectKey string) ([]*internalTypes.ObjectPartMeta, error) {
+func (replica *ShardReplica) ReadObjectPartsMeta(objectBucket string, objectKey string) ([]internalTypes.ObjectPartMeta, error) {
 	pathToKey := replica.getPathToKey(objectBucket, objectKey)
 
 	files, err := os.ReadDir(pathToKey)
@@ -66,7 +66,7 @@ func (replica *ShardReplica) ReadObjectPartsMeta(objectBucket string, objectKey 
 		return nil, err
 	}
 
-	objectPartsMeta := make([]*internalTypes.ObjectPartMeta, 0)
+	objectPartsMeta := make([]internalTypes.ObjectPartMeta, 0)
 
 	for _, file := range files {
 		if !strings.Contains(file.Name(), ".meta") {
@@ -79,9 +79,9 @@ func (replica *ShardReplica) ReadObjectPartsMeta(objectBucket string, objectKey 
 			continue
 		}
 
-		objectPartMeta := &internalTypes.ObjectPartMeta{}
+		objectPartMeta := internalTypes.ObjectPartMeta{}
 
-		err = json.Unmarshal(objectPartMetaBytes, objectPartMeta)
+		err = json.Unmarshal(objectPartMetaBytes, &objectPartMeta)
 		if err != nil {
 			logs.ReplicaLogger.Println(err)
 			continue

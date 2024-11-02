@@ -17,8 +17,8 @@ var (
 
 func main() {
 	operation := flag.String("operation", "upload", "upload or download file")
-	bucketName := flag.String("bucket", "/tmp", "upload or download file")
-	objectKey := flag.String("objectKey", "/karma8/test-data/test1.data", "create fake data file")
+	bucketName := flag.String("bucket", "tmp", "upload or download file")
+	objectKey := flag.String("objectKey", "karma8/test-data/test1.data", "create fake data file")
 	flag.Parse()
 
 	//CreateFakeFiles()
@@ -75,7 +75,7 @@ func DownloadFile(bucket string, objectKey string) {
 }
 
 func UploadFile(bucket string, objectKey string) {
-	fileNamePath := path.Join(bucket, objectKey)
+	fileNamePath := path.Join("/", bucket, "/", objectKey)
 
 	httpClient := &http.Client{}
 

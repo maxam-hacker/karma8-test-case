@@ -76,7 +76,7 @@ func WriteObjectPart(objectPart internalTypes.ObjectPart) error {
 	return nil
 }
 
-func ReadObjectPartsMeta(objectBucket string, objectKey string) ([]*internalTypes.ObjectPartMeta, error) {
+func ReadObjectPartsMeta(objectBucket string, objectKey string) ([]internalTypes.ObjectPartMeta, error) {
 	for _, replica := range replicas {
 		objectPartsMeta, err := replica.ReadObjectPartsMeta(objectBucket, objectKey)
 		if err != nil {

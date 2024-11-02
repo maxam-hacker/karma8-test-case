@@ -90,7 +90,7 @@ func DownloadPart(bucket string, key string) (chan *internalTypes.ObjectPart, er
 		return nil, ErrKeyShardTopology
 	}
 
-	allPartsMeta := make([]*internalTypes.ObjectPartMeta, 0)
+	allPartsMeta := make([]internalTypes.ObjectPartMeta, 0)
 
 	for _, objectShard := range keyShard.ObjectsShards {
 
