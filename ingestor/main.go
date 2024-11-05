@@ -112,7 +112,9 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 
 	for part := range parts {
-		w.Write(*part.Data)
+		if len(*part.Data) > 0 {
+			w.Write(*part.Data)
+		}
 	}
 }
 

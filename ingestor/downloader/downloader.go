@@ -1,5 +1,0 @@
-package downloader
-
-func Download() {
-
-}
