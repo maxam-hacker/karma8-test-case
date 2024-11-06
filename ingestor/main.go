@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,16 +15,36 @@ import (
 	"karma8-storage/ingestor/shards"
 	"karma8-storage/internals/rest"
 	internalTypes "karma8-storage/internals/types"
-)
-
-var (
-	ErrUnknownOpts = errors.New("unknown request options")
+	internalUtils "karma8-storage/internals/utils"
 )
 
 func doUpload(w http.ResponseWriter, r *http.Request) {
-	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
-	objectKey := r.Header.Get("X-Karma8-Object-Key")
-	objectTotalSize := r.Header.Get("X-Karma8-Object-Total-Size")
+	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object bucket name")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectKey, err := internalUtils.ObjectKeyGetAndValidate(r)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object key value")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectTotalSize, err := internalUtils.ObjectTotalSizeGetAndValidate(r)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object total size value")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
 
 	logs.MainLogger.Println("uploading object...")
 	logs.MainLogger.Println("bucket:", objectBucket)
@@ -38,7 +57,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
 		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
-		w.WriteHeader(200)
+		w.WriteHeader(500)
 		logs.MainLogger.Println(err)
 		return
 	}
@@ -57,7 +76,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 			} else {
 				w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
 				w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
-				w.WriteHeader(200)
+				w.WriteHeader(500)
 				logs.MainLogger.Println(err)
 				return
 			}
@@ -96,8 +115,23 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func doDownload(w http.ResponseWriter, r *http.Request) {
-	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
-	objectKey := r.Header.Get("X-Karma8-Object-Key")
+	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object bucket name")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectKey, err := internalUtils.ObjectKeyGetAndValidate(r)
+	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object key value")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
 
 	logs.MainLogger.Println("downloading object...")
 	logs.MainLogger.Println("bucket:", objectBucket)
@@ -105,17 +139,24 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 
 	parts, err := shards.DownloadPart(objectBucket, objectKey)
 	if err != nil {
+		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while downloading file parts")
+		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.WriteHeader(500)
 		logs.MainLogger.Println(err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/octet-stream")
+	totalSizeProcessed := 0
 
+	w.Header().Set("Content-Type", "application/octet-stream")
 	for part := range parts {
 		if len(*part.Data) > 0 {
 			w.Write(*part.Data)
+			totalSizeProcessed += len(*part.Data)
 		}
 	}
+
+	logs.MainLogger.Println("done", totalSizeProcessed)
 }
 
 func runRestServer() {

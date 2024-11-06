@@ -13,11 +13,15 @@ import (
 )
 
 type ShardReplica struct {
-	BasePath string
+	BasePath  string
+	LastError error
 }
 
 var (
-	ErrEmptyOffset = errors.New("can't find file for offset")
+	ErrObjectKeyFolder    = errors.New("can't find key folder for object")
+	ErrObjectMetaFolder   = errors.New("can't find meta folder for object")
+	ErrObjectBucketFolder = errors.New("can't find bucket folder for object")
+	ErrReplicaFolder      = errors.New("can't find replica folder")
 )
 
 func (replica *ShardReplica) WriteObjectPart(objectPart internalTypes.ObjectPart) error {
@@ -59,6 +63,11 @@ func (replica *ShardReplica) WriteObjectPart(objectPart internalTypes.ObjectPart
 func (replica *ShardReplica) ReadObjectPartsMeta(objectBucket string, objectKey string) ([]internalTypes.ObjectPartMeta, error) {
 	pathToKey := replica.getPathToKey(objectBucket, objectKey)
 
+	_, err := os.Stat(pathToKey)
+	if err != nil {
+		return nil, ErrObjectMetaFolder
+	}
+
 	files, err := os.ReadDir(pathToKey)
 	if err != nil {
 		logs.ReplicaLogger.Println(err)
@@ -95,6 +104,11 @@ func (replica *ShardReplica) ReadObjectPartsMeta(objectBucket string, objectKey 
 func (replica *ShardReplica) ReadObjectPart(objectBucket string, objectKey string, totalObjectOffset uint64) (*internalTypes.ObjectPart, error) {
 	pathToKey := replica.getPathToKey(objectBucket, objectKey)
 
+	_, err := os.Stat(pathToKey)
+	if err != nil {
+		return nil, ErrObjectKeyFolder
+	}
+
 	objectPartBytes, err := os.ReadFile(fmt.Sprintf("%s/%d", pathToKey, totalObjectOffset))
 	if err != nil {
 		logs.ReplicaLogger.Println(err)
@@ -115,7 +129,12 @@ func (replica *ShardReplica) ReadObjectPart(objectBucket string, objectKey strin
 func (replica *ShardReplica) DeleteKey(objectBucket string, objectKey string) error {
 	pathToKey := replica.getPathToKey(objectBucket, objectKey)
 
-	err := os.RemoveAll(pathToKey)
+	_, err := os.Stat(pathToKey)
+	if err != nil {
+		return ErrObjectKeyFolder
+	}
+
+	err = os.RemoveAll(pathToKey)
 	if err != nil {
 		logs.ReplicaLogger.Println(err)
 		return err
@@ -127,7 +146,12 @@ func (replica *ShardReplica) DeleteKey(objectBucket string, objectKey string) er
 func (replica *ShardReplica) DeleteBucket(objectBucket string) error {
 	pathToBucket := replica.getPathToBucket(objectBucket)
 
-	err := os.RemoveAll(pathToBucket)
+	_, err := os.Stat(pathToBucket)
+	if err != nil {
+		return ErrObjectBucketFolder
+	}
+
+	err = os.RemoveAll(pathToBucket)
 	if err != nil {
 		logs.ReplicaLogger.Println(err)
 		return err
@@ -137,7 +161,12 @@ func (replica *ShardReplica) DeleteBucket(objectBucket string) error {
 }
 
 func (replica *ShardReplica) DeleteReplica() error {
-	err := os.RemoveAll(replica.BasePath)
+	_, err := os.Stat(replica.BasePath)
+	if err != nil {
+		return ErrReplicaFolder
+	}
+
+	err = os.RemoveAll(replica.BasePath)
 	if err != nil {
 		logs.ReplicaLogger.Println(err)
 		return err

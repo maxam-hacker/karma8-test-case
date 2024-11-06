@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,19 +14,36 @@ import (
 
 	"karma8-storage/internals/rest"
 	internalTypes "karma8-storage/internals/types"
+	internalUtils "karma8-storage/internals/utils"
 	"karma8-storage/shard-manager/logs"
 	"karma8-storage/shard-manager/replicas"
 )
 
 var (
-	ErrUnknownOpts = errors.New("unknown request options")
+	ServiceErrorHeader        = "X-Karma8-Shard-Manager-Service-Error"
+	ServiceErrorContentHeader = "X-Karma8-Shard-Manager-Service-Error-Content"
 )
 
 func doMeta(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("do meta request...")
 
-	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
-	objectKey := r.Header.Get("X-Karma8-Object-Key")
+	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object bucket name")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectKey, err := internalUtils.ObjectKeyGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object key value")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
 
 	logs.MainLogger.Println("meta for object...")
 	logs.MainLogger.Println("bucket:", objectBucket)
@@ -35,18 +51,18 @@ func doMeta(w http.ResponseWriter, r *http.Request) {
 
 	partsMeta, err := replicas.ReadObjectPartsMeta(objectBucket, objectKey)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while reading object parts meta")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
-		w.WriteHeader(200)
+		w.Header().Add(ServiceErrorHeader, "error while reading object parts meta")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(500)
 		logs.MainLogger.Println(err)
 		return
 	}
 
 	partsMetaBytes, err := json.Marshal(partsMeta)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while marshal object parts meta")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
-		w.WriteHeader(200)
+		w.Header().Add(ServiceErrorHeader, "error while marshal object parts meta")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(500)
 		logs.MainLogger.Println(err)
 		return
 	}
@@ -68,8 +84,8 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 
 	offset, err := strconv.ParseUint(totalObjectOffset, 10, 0)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while parsing total object offset")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.Header().Add(ServiceErrorHeader, "error while parsing total object offset")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
 		w.WriteHeader(200)
 		logs.MainLogger.Println(err)
 		return
@@ -77,8 +93,8 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 
 	objectPart, err := replicas.ReadObjectPart(objectBucket, objectKey, offset)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while reading object part")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.Header().Add(ServiceErrorHeader, "error while reading object part")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
 		w.WriteHeader(200)
 		logs.MainLogger.Println(err)
 		return
@@ -106,27 +122,27 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 
 	partSize, err := strconv.ParseUint(objectPartDataSize, 10, 0)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
-		w.WriteHeader(200)
+		w.Header().Add(ServiceErrorHeader, "error while uploading file")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
 		logs.MainLogger.Println(err)
 		return
 	}
 
 	totalOffset, err := strconv.ParseUint(objectTotalOffset, 10, 0)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
-		w.WriteHeader(200)
+		w.Header().Add(ServiceErrorHeader, "error while uploading file")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
 		logs.MainLogger.Println(err)
 		return
 	}
 
 	totalSize, err := strconv.ParseUint(objectTotalSize, 10, 0)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
-		w.WriteHeader(200)
+		w.Header().Add(ServiceErrorHeader, "error while uploading file")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
 		logs.MainLogger.Println(err)
 		return
 	}
@@ -143,9 +159,9 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 			if err == io.EOF {
 				doRead = false
 			} else {
-				w.Header().Add("X-Karma8-Shard-Manager-Service-Error", "error while uploading file")
-				w.Header().Add("X-Karma8-Shard-Manager-Service-Error-Content", err.Error())
-				w.WriteHeader(200)
+				w.Header().Add(ServiceErrorHeader, "error while uploading file")
+				w.Header().Add(ServiceErrorContentHeader, err.Error())
+				w.WriteHeader(500)
 				logs.MainLogger.Println(err)
 				return
 			}
@@ -155,7 +171,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 		totalSizeProcessed += n
 	}
 
-	replicas.WriteObjectPart(internalTypes.ObjectPart{
+	err = replicas.WriteObjectPart(internalTypes.ObjectPart{
 		Bucket:            objectBucket,
 		Key:               objectKey,
 		Data:              &partDataBuffer,
@@ -163,6 +179,14 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 		TotalObjectOffset: totalOffset,
 		TotalObjectSize:   totalSize,
 	})
+
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "error while writing object part")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(500)
+		logs.MainLogger.Println(err)
+		return
+	}
 
 	logs.MainLogger.Println("done", totalSize, totalSizeProcessed)
 }

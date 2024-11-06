@@ -21,14 +21,20 @@ type ShardOptions struct {
 }
 
 type Shard struct {
-	Opts   ShardOptions
-	Client *http.Client
+	Opts        ShardOptions
+	Client      *http.Client
+	DownloadUrl string
+	UploadUrl   string
+	MetaUrl     string
 }
 
 func New(opts ShardOptions) *Shard {
 	shard := &Shard{
-		Opts:   opts,
-		Client: &http.Client{},
+		Opts:        opts,
+		Client:      &http.Client{},
+		DownloadUrl: fmt.Sprintf("http://%s:%d/shard-manager/object/part/download", opts.IP, opts.Port),
+		UploadUrl:   fmt.Sprintf("http://%s:%d/shard-manager/object/part/upload", opts.IP, opts.Port),
+		MetaUrl:     fmt.Sprintf("http://%s:%d/shard-manager/object/meta", opts.IP, opts.Port),
 	}
 
 	return shard
@@ -39,13 +45,11 @@ func (shard *Shard) IngestObjectPart(objectPart internalTypes.ObjectPart) error 
 }
 
 func (shard *Shard) SpitOutPart(bucket string, key string, offset uint64) (*internalTypes.ObjectPart, error) {
-	logs.ShardLogger.Println("uploading part...")
+	logs.ShardLogger.Println("spitting out part...")
 
 	httpClient := &http.Client{}
 
-	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager/object/part/download", shard.Opts.IP, shard.Opts.Port)
-
-	request, err := http.NewRequest("POST", shardUrl, nil)
+	request, err := http.NewRequest("POST", shard.DownloadUrl, nil)
 	if err != nil {
 		logs.ShardLogger.Println(err)
 		return nil, err
@@ -96,9 +100,7 @@ func (shard *Shard) SpitOutObjectMeta(bucket string, key string) ([]internalType
 
 	httpClient := &http.Client{}
 
-	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager/object/meta", shard.Opts.IP, shard.Opts.Port)
-
-	request, err := http.NewRequest("POST", shardUrl, nil)
+	request, err := http.NewRequest("POST", shard.MetaUrl, nil)
 	if err != nil {
 		logs.ShardLogger.Println(err)
 		return partsMeta, err
@@ -137,9 +139,7 @@ func (shard *Shard) uploadPart(objectPart internalTypes.ObjectPart) error {
 
 	httpClient := &http.Client{}
 
-	shardUrl := fmt.Sprintf("http://%s:%d/shard-manager/object/part/upload", shard.Opts.IP, shard.Opts.Port)
-
-	request, err := http.NewRequest("POST", shardUrl, bytes.NewReader(*objectPart.Data))
+	request, err := http.NewRequest("POST", shard.UploadUrl, bytes.NewReader(*objectPart.Data))
 	if err != nil {
 		logs.ShardLogger.Println(err)
 		return err
