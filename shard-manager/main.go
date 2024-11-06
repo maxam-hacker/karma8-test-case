@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/go-chi/chi"
@@ -20,8 +19,9 @@ import (
 )
 
 var (
-	ServiceErrorHeader        = "X-Karma8-Shard-Manager-Service-Error"
-	ServiceErrorContentHeader = "X-Karma8-Shard-Manager-Service-Error-Content"
+	ServiceErrorHeader                   = "X-Karma8-Shard-Manager-Service-Error"
+	ServiceErrorContentHeader            = "X-Karma8-Shard-Manager-Service-Error-Content"
+	ServiceErrorObjectIsNotPresentHeader = "X-Karma8-Shard-Manager-Service-Error-Object-Is-Not-Present"
 )
 
 func doMeta(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,12 @@ func doMeta(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("key:", objectKey)
 
 	partsMeta, err := replicas.ReadObjectPartsMeta(objectBucket, objectKey)
-	if err != nil {
+	if err == replicas.ErrObjectIsNotPresent {
+		w.Header().Add(ServiceErrorObjectIsNotPresentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	} else if err != nil {
 		w.Header().Add(ServiceErrorHeader, "error while reading object parts meta")
 		w.Header().Add(ServiceErrorContentHeader, err.Error())
 		w.WriteHeader(500)
@@ -74,28 +79,47 @@ func doMeta(w http.ResponseWriter, r *http.Request) {
 func doDownload(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("do download request...")
 
-	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
-	objectKey := r.Header.Get("X-Karma8-Object-Key")
-	totalObjectOffset := r.Header.Get("X-Karma8-Object-Total-Offset")
+	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object bucket name")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectKey, err := internalUtils.ObjectKeyGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object key value")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	totalObjectOffset, err := internalUtils.ObjectTotalOffsetGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object total offset")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
 
 	logs.MainLogger.Println("download object part...")
 	logs.MainLogger.Println("bucket:", objectBucket)
 	logs.MainLogger.Println("key:", objectKey)
 
-	offset, err := strconv.ParseUint(totalObjectOffset, 10, 0)
-	if err != nil {
-		w.Header().Add(ServiceErrorHeader, "error while parsing total object offset")
-		w.Header().Add(ServiceErrorContentHeader, err.Error())
-		w.WriteHeader(200)
+	objectPart, err := replicas.ReadObjectPart(objectBucket, objectKey, totalObjectOffset)
+	if err == replicas.ErrObjectIsNotPresent {
+		w.Header().Add(ServiceErrorObjectIsNotPresentHeader, err.Error())
+		w.WriteHeader(404)
 		logs.MainLogger.Println(err)
 		return
-	}
-
-	objectPart, err := replicas.ReadObjectPart(objectBucket, objectKey, offset)
-	if err != nil {
+	} else if err != nil {
 		w.Header().Add(ServiceErrorHeader, "error while reading object part")
 		w.Header().Add(ServiceErrorContentHeader, err.Error())
-		w.WriteHeader(200)
+		w.WriteHeader(500)
 		logs.MainLogger.Println(err)
 		return
 	}
@@ -107,11 +131,50 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 func doUpload(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("do upload request...")
 
-	objectBucket := r.Header.Get("X-Karma8-Object-Bucket")
-	objectKey := r.Header.Get("X-Karma8-Object-Key")
-	objectPartDataSize := r.Header.Get("X-Karma8-Object-Part-Data-Size")
-	objectTotalOffset := r.Header.Get("X-Karma8-Object-Total-Offset")
-	objectTotalSize := r.Header.Get("X-Karma8-Object-Total-Size")
+	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object bucket name")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectKey, err := internalUtils.ObjectKeyGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object key value")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectTotalSize, err := internalUtils.ObjectTotalSizeGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object total size")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectTotalOffset, err := internalUtils.ObjectTotalOffsetGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object total offset")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectPartDataSize, err := internalUtils.ObjectPartDataSizeGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object total offset")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
 
 	logs.MainLogger.Println("uploading object...")
 	logs.MainLogger.Println("bucket:", objectBucket)
@@ -119,33 +182,6 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("part data size", objectPartDataSize)
 	logs.MainLogger.Println("total offset", objectTotalOffset)
 	logs.MainLogger.Println("total size", objectTotalSize)
-
-	partSize, err := strconv.ParseUint(objectPartDataSize, 10, 0)
-	if err != nil {
-		w.Header().Add(ServiceErrorHeader, "error while uploading file")
-		w.Header().Add(ServiceErrorContentHeader, err.Error())
-		w.WriteHeader(404)
-		logs.MainLogger.Println(err)
-		return
-	}
-
-	totalOffset, err := strconv.ParseUint(objectTotalOffset, 10, 0)
-	if err != nil {
-		w.Header().Add(ServiceErrorHeader, "error while uploading file")
-		w.Header().Add(ServiceErrorContentHeader, err.Error())
-		w.WriteHeader(404)
-		logs.MainLogger.Println(err)
-		return
-	}
-
-	totalSize, err := strconv.ParseUint(objectTotalSize, 10, 0)
-	if err != nil {
-		w.Header().Add(ServiceErrorHeader, "error while uploading file")
-		w.Header().Add(ServiceErrorContentHeader, err.Error())
-		w.WriteHeader(404)
-		logs.MainLogger.Println(err)
-		return
-	}
 
 	bytesBuffer := make([]byte, 16*1024)
 	partDataBuffer := make([]byte, 0)
@@ -175,11 +211,10 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 		Bucket:            objectBucket,
 		Key:               objectKey,
 		Data:              &partDataBuffer,
-		PartDataSize:      partSize,
-		TotalObjectOffset: totalOffset,
-		TotalObjectSize:   totalSize,
+		PartDataSize:      objectPartDataSize,
+		TotalObjectOffset: objectTotalOffset,
+		TotalObjectSize:   objectTotalSize,
 	})
-
 	if err != nil {
 		w.Header().Add(ServiceErrorHeader, "error while writing object part")
 		w.Header().Add(ServiceErrorContentHeader, err.Error())
@@ -188,7 +223,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logs.MainLogger.Println("done", totalSize, totalSizeProcessed)
+	logs.MainLogger.Println("done", objectTotalSize, totalSizeProcessed)
 }
 
 func runRestServer() {

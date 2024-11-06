@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/go-chi/chi"
@@ -53,15 +52,6 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 
 	bytesBuffer := make([]byte, 16*1024)
 
-	totalSize, err := strconv.Atoi(objectTotalSize)
-	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
-		w.WriteHeader(500)
-		logs.MainLogger.Println(err)
-		return
-	}
-
 	totalSizeProcessed := 0
 
 	totalOffset := 0
@@ -90,7 +80,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 				Data:              &partDataBuffer,
 				PartDataSize:      uint64(len(partDataBuffer)),
 				TotalObjectOffset: uint64(totalOffset),
-				TotalObjectSize:   uint64(totalSize),
+				TotalObjectSize:   objectTotalSize,
 			})
 
 			totalOffset += len(partDataBuffer)
@@ -107,7 +97,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 			Data:              &partDataBuffer,
 			PartDataSize:      uint64(len(partDataBuffer)),
 			TotalObjectOffset: uint64(totalOffset),
-			TotalObjectSize:   uint64(totalSize),
+			TotalObjectSize:   objectTotalSize,
 		})
 	}
 
