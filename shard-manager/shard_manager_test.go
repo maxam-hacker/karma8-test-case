@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -12,6 +13,11 @@ import (
 	"karma8-storage/shard-manager/replicas"
 
 	"github.com/stretchr/testify/assert"
+)
+
+var (
+	partData        = []byte("Replica test1 data smple")
+	totalObjectSize = len(partData)
 )
 
 func TestMain(m *testing.M) {
@@ -35,9 +41,11 @@ func TestMain(m *testing.M) {
 }
 
 func Test0001(t *testing.T) {
-	partData := []byte("Replica test1 data smple")
-	totalObjectSize := len(partData)
+	uploadData(t)
+	downloadData(t)
+}
 
+func uploadData(t *testing.T) {
 	partBucket := "karma8-test-case-0-bucket"
 	partKey := "replica-test-case-0-key"
 
@@ -66,4 +74,43 @@ func Test0001(t *testing.T) {
 	uploadResponse, err := httpClient.Do(request)
 	assert.NoError(t, err)
 	assert.Equal(t, uploadResponse.StatusCode, 200)
+}
+
+func downloadData(t *testing.T) {
+	httpClient := &http.Client{}
+
+	request, err := http.NewRequest("POST", "http://127.0.0.1:7788/shard-manager/object/part/download", nil)
+	assert.NoError(t, err)
+
+	partBucket := "karma8-test-case-0-bucket"
+	partKey := "replica-test-case-0-key"
+
+	request.Header.Set("X-Karma8-Object-Bucket", partBucket)
+	request.Header.Set("X-Karma8-Object-Key", partKey)
+	request.Header.Set("X-Karma8-Object-Total-Offset", strconv.Itoa(0))
+
+	downloadResponse, err := httpClient.Do(request)
+	assert.NoError(t, err)
+	assert.Equal(t, downloadResponse.StatusCode, 200)
+
+	responseBytes := make([]byte, 16*1024)
+
+	doRead := true
+
+	size := 0
+
+	for doRead {
+		n, err := downloadResponse.Body.Read(responseBytes)
+		if err != nil {
+			if err != io.EOF {
+				break
+			} else {
+				doRead = false
+			}
+		}
+
+		size += n
+	}
+
+	assert.Equal(t, size, totalObjectSize)
 }
