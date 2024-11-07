@@ -61,6 +61,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 
 	totalSizeProcessed := 0
 
+	partIdx := uint16(0)
 	totalOffset := 0
 	partDataBuffer := make([]byte, 0)
 	doRead := true
@@ -93,7 +94,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 				PartDataSize:      uint64(len(partDataBuffer)),
 				TotalObjectOffset: uint64(totalOffset),
 				TotalObjectSize:   objectTotalSize,
-			})
+			}, partIdx)
 			if err != nil {
 				shards.EraseParts(objectBucket, objectKey)
 				w.Header().Add(ServiceErrorHeader, "error while uploading file part")
@@ -104,6 +105,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 
 			totalOffset += len(partDataBuffer)
 			partDataBuffer = make([]byte, 0)
+			partIdx++
 		}
 
 		totalSizeProcessed += n
@@ -117,7 +119,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 			PartDataSize:      uint64(len(partDataBuffer)),
 			TotalObjectOffset: uint64(totalOffset),
 			TotalObjectSize:   objectTotalSize,
-		})
+		}, partIdx)
 		if err != nil {
 			shards.EraseParts(objectBucket, objectKey)
 			w.Header().Add(ServiceErrorHeader, "error while uploading file part")

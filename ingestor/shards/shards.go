@@ -38,7 +38,7 @@ func Initialize(shardsConfigFilePath string) {
 	Storage = storageTopology
 }
 
-func UploadPart(objectPart internalTypes.ObjectPart) error {
+func UploadPart(objectPart internalTypes.ObjectPart, partIdx uint16) error {
 	if Storage == nil {
 		return ErrStorageTopology
 	}
@@ -59,8 +59,12 @@ func UploadPart(objectPart internalTypes.ObjectPart) error {
 		return ErrKeyShardTopology
 	}
 
-	packetSha := sha256.Sum256(*objectPart.Data)
-	objectIdx := binary.LittleEndian.Uint16(packetSha[:]) % keyShard.ObjectsShardsCount
+	// Hash balancing
+	//packetSha := sha256.Sum256(*objectPart.Data)
+	//objectIdx := binary.LittleEndian.Uint16(packetSha[:]) % keyShard.ObjectsShardsCount
+
+	// Round-robin balancing
+	objectIdx := partIdx % keyShard.ObjectsShardsCount
 	objectShard, exists := Storage.BucketsShards[bucketIdx].KeysShards[keyIdx].ObjectsShards[objectIdx]
 	if !exists {
 		logs.ShardsLogger.Println(ErrObjectShardTopology)
