@@ -14,20 +14,20 @@ func main() {
 	operation := flag.String("operation", "upload", "upload or download file")
 	bucketName := flag.String("bucket", "tmp", "bucket name for uploaded object")
 	keyValue := flag.String("key", "karma8/test-data/test1.data", "key value for uploaded object")
-	resultFile := flag.String("result", "./test1.data", "target file to upload / result file to store object content")
+	targetFile := flag.String("target", "./test1.data", "target file to upload / result file to store object content")
 	flag.Parse()
 
 	switch *operation {
 	case "upload":
-		UploadFile(*bucketName, *keyValue, *resultFile)
+		UploadFile(*bucketName, *keyValue, *targetFile)
 	case "download":
-		DownloadFile(*bucketName, *keyValue, *resultFile)
+		DownloadFile(*bucketName, *keyValue, *targetFile)
 	default:
 		fmt.Println("unknown operation")
 	}
 }
 
-func DownloadFile(bucket string, objectKey string, resultFile string) {
+func DownloadFile(bucket string, objectKey string, targetFile string) {
 	httpClient := http.Client{}
 
 	request, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor/file/download", nil)
@@ -53,7 +53,7 @@ func DownloadFile(bucket string, objectKey string, resultFile string) {
 
 	totalSize := 0
 
-	tgtFile, err := os.Create(resultFile)
+	tgtFile, err := os.Create(targetFile)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -82,8 +82,8 @@ func DownloadFile(bucket string, objectKey string, resultFile string) {
 	fmt.Println(totalSize)
 }
 
-func UploadFile(bucket string, objectKey string, resultFile string) {
-	fileNamePath := resultFile
+func UploadFile(bucket string, objectKey string, targetFile string) {
+	fileNamePath := targetFile
 
 	httpClient := &http.Client{}
 
