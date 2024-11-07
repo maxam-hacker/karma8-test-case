@@ -27,6 +27,7 @@ func NewTargetFileReader(targetPath string) (*TargetFileReader, error) {
 }
 
 func (reader TargetFileReader) Read(p []byte) (n int, err error) {
+	//time.Sleep(7 * time.Second)
 	return reader.file.Read(p)
 }
 
@@ -96,7 +97,7 @@ func DownloadFile(bucket string, objectKey string, targetFile string) {
 			tgtFile.Write(responseBytes[0:n])
 		}
 
-		//time.Sleep(1 * time.Second)
+		//time.Sleep(7 * time.Second)
 
 		totalSize += n
 	}
