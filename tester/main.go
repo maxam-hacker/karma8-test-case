@@ -76,6 +76,8 @@ func DownloadFile(bucket string, objectKey string, targetFile string) {
 			tgtFile.Write(responseBytes[0:n])
 		}
 
+		//time.Sleep(1 * time.Second)
+
 		totalSize += n
 	}
 

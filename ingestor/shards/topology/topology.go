@@ -32,6 +32,12 @@ func Create(pathToConfigFile string) (*Storage, error) {
 		pathToConfigFile = DefaultConfigFilePath
 	}
 
+	_, err := os.Stat(pathToConfigFile)
+	if err != nil {
+		logs.TopologyLogger.Println(err)
+		return nil, err
+	}
+
 	configContentBytes, err := os.ReadFile(pathToConfigFile)
 	if err != nil {
 		logs.TopologyLogger.Println(err)

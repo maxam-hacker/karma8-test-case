@@ -136,5 +136,5 @@ func DownloadPart(bucket string, key string) (chan *internalTypes.ObjectPart, er
 }
 
 func EraseParts(objectBucket string, objectKey string) {
-
+	// TODO...
 }
