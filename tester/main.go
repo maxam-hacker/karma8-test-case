@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -9,6 +8,27 @@ import (
 	"os"
 	"strconv"
 )
+
+type TargetFileReader struct {
+	TargetPath string
+	file       *os.File
+}
+
+func NewTargetFileReader(targetPath string) (*TargetFileReader, error) {
+	file, err := os.Open(targetPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TargetFileReader{
+		TargetPath: targetPath,
+		file:       file,
+	}, nil
+}
+
+func (reader TargetFileReader) Read(p []byte) (n int, err error) {
+	return reader.file.Read(p)
+}
 
 func main() {
 	operation := flag.String("operation", "upload", "upload or download file")
@@ -85,23 +105,21 @@ func DownloadFile(bucket string, objectKey string, targetFile string) {
 }
 
 func UploadFile(bucket string, objectKey string, targetFile string) {
-	fileNamePath := targetFile
-
 	httpClient := &http.Client{}
 
-	testFileInfo, err := os.Stat(fileNamePath)
+	testFileInfo, err := os.Stat(targetFile)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	testFileBytes, err := os.ReadFile(fileNamePath)
+	reader, err := NewTargetFileReader(targetFile)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	request, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor/file/upload", bytes.NewReader(testFileBytes))
+	request, err := http.NewRequest("POST", "http://127.0.0.1:7788/ingestor/file/upload", reader)
 	if err != nil {
 		fmt.Println(err)
 		return

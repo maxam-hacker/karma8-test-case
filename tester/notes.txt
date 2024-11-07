@@ -5,3 +5,12 @@ test flow example 1:
     ./tester -operation=download -bucket=karma8-test-1 -key=large-pdf-book-4 -target=./target.pdf
 
     diff /media/maxam/b31b793e-a561-4367-a398-f74d15da1c6e/docs/computer-internet-security-a-hands-on-approach.pdf ./target.pdf
+
+
+test flow example 2:
+
+    ./tester -operation=upload -bucket=karma8-test-2 -key=vary-large-file-1 -target=/home/maxam/Downloads/very-large-file.7z
+
+    ./tester -operation=download -bucket=karma8-test-2 -key=vary-large-file-1 -target=./target.pdf
+
+    diff /home/maxam/Downloads/very-large-file.7z ./target.pdf
