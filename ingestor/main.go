@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/go-chi/chi"
 
@@ -17,11 +18,17 @@ import (
 	internalUtils "karma8-storage/internals/utils"
 )
 
+var (
+	ServiceErrorHeader        = "X-Karma8-Ingestor-Service-Error"
+	ServiceErrorContentHeader = "X-Karma8-Ingestor-Service-Error-Content"
+	ObjectPartSize            = 10 * 1024 * 1024
+)
+
 func doUpload(w http.ResponseWriter, r *http.Request) {
 	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object bucket name")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.Header().Add(ServiceErrorHeader, "can't get object bucket name")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
 		w.WriteHeader(404)
 		logs.MainLogger.Println(err)
 		return
@@ -29,8 +36,8 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 
 	objectKey, err := internalUtils.ObjectKeyGetAndValidate(r)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object key value")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.Header().Add(ServiceErrorHeader, "can't get object key value")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
 		w.WriteHeader(404)
 		logs.MainLogger.Println(err)
 		return
@@ -38,8 +45,8 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 
 	objectTotalSize, err := internalUtils.ObjectTotalSizeGetAndValidate(r)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object total size value")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.Header().Add(ServiceErrorHeader, "can't get object total size value")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
 		w.WriteHeader(404)
 		logs.MainLogger.Println(err)
 		return
@@ -58,14 +65,19 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 	partDataBuffer := make([]byte, 0)
 	doRead := true
 
+	controller := http.NewResponseController(w)
+
 	for doRead {
+		controller.SetReadDeadline(time.Now().Add(5 * time.Second))
+
 		n, err := r.Body.Read(bytesBuffer)
 		if err != nil {
 			if err == io.EOF {
 				doRead = false
 			} else {
-				w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while uploading file")
-				w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+				shards.EraseParts(objectBucket, objectKey)
+				w.Header().Add(ServiceErrorHeader, "error while reading file")
+				w.Header().Add(ServiceErrorContentHeader, err.Error())
 				w.WriteHeader(500)
 				logs.MainLogger.Println(err)
 				return
@@ -73,8 +85,8 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		partDataBuffer = append(partDataBuffer, bytesBuffer[0:n]...)
-		if len(partDataBuffer) >= 10*1024*1024 {
-			shards.UploadPart(internalTypes.ObjectPart{
+		if len(partDataBuffer) >= ObjectPartSize {
+			err = shards.UploadPart(internalTypes.ObjectPart{
 				Bucket:            objectBucket,
 				Key:               objectKey,
 				Data:              &partDataBuffer,
@@ -82,6 +94,13 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 				TotalObjectOffset: uint64(totalOffset),
 				TotalObjectSize:   objectTotalSize,
 			})
+			if err != nil {
+				shards.EraseParts(objectBucket, objectKey)
+				w.Header().Add(ServiceErrorHeader, "error while uploading file part")
+				w.Header().Add(ServiceErrorContentHeader, err.Error())
+				w.WriteHeader(500)
+				return
+			}
 
 			totalOffset += len(partDataBuffer)
 			partDataBuffer = make([]byte, 0)
@@ -91,7 +110,7 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(partDataBuffer) > 0 {
-		shards.UploadPart(internalTypes.ObjectPart{
+		err = shards.UploadPart(internalTypes.ObjectPart{
 			Bucket:            objectBucket,
 			Key:               objectKey,
 			Data:              &partDataBuffer,
@@ -99,6 +118,13 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 			TotalObjectOffset: uint64(totalOffset),
 			TotalObjectSize:   objectTotalSize,
 		})
+		if err != nil {
+			shards.EraseParts(objectBucket, objectKey)
+			w.Header().Add(ServiceErrorHeader, "error while uploading file part")
+			w.Header().Add(ServiceErrorContentHeader, err.Error())
+			w.WriteHeader(500)
+			return
+		}
 	}
 
 	logs.MainLogger.Println("done", totalSizeProcessed)
@@ -107,8 +133,8 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 func doDownload(w http.ResponseWriter, r *http.Request) {
 	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object bucket name")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.Header().Add(ServiceErrorHeader, "can't get object bucket name")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
 		w.WriteHeader(404)
 		logs.MainLogger.Println(err)
 		return
@@ -116,8 +142,8 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 
 	objectKey, err := internalUtils.ObjectKeyGetAndValidate(r)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "can't get object key value")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.Header().Add(ServiceErrorHeader, "can't get object key value")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
 		w.WriteHeader(404)
 		logs.MainLogger.Println(err)
 		return
@@ -129,8 +155,8 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 
 	parts, err := shards.DownloadPart(objectBucket, objectKey)
 	if err != nil {
-		w.Header().Add("X-Karma8-Ingestor-Service-Error", "error while downloading file parts")
-		w.Header().Add("X-Karma8-Ingestor-Service-Error-Content", err.Error())
+		w.Header().Add(ServiceErrorHeader, "error while downloading file parts")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
 		w.WriteHeader(500)
 		logs.MainLogger.Println(err)
 		return
@@ -139,8 +165,12 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 	totalSizeProcessed := 0
 
 	w.Header().Set("Content-Type", "application/octet-stream")
+
+	controller := http.NewResponseController(w)
+
 	for part := range parts {
 		if len(*part.Data) > 0 {
+			controller.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			w.Write(*part.Data)
 			totalSizeProcessed += len(*part.Data)
 		}

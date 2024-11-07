@@ -134,3 +134,7 @@ func DownloadPart(bucket string, key string) (chan *internalTypes.ObjectPart, er
 
 	return chunks, nil
 }
+
+func EraseParts(objectBucket string, objectKey string) {
+
+}
