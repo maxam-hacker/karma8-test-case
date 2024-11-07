@@ -24,6 +24,41 @@ var (
 	ServiceErrorObjectIsNotPresentHeader = "X-Karma8-Shard-Manager-Service-Error-Object-Is-Not-Present"
 )
 
+func doErase(w http.ResponseWriter, r *http.Request) {
+	logs.MainLogger.Println("do meta request...")
+
+	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object bucket name")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	objectKey, err := internalUtils.ObjectKeyGetAndValidate(r)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't get object key value")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(404)
+		logs.MainLogger.Println(err)
+		return
+	}
+
+	logs.MainLogger.Println("erase object...")
+	logs.MainLogger.Println("bucket:", objectBucket)
+	logs.MainLogger.Println("key:", objectKey)
+
+	err = replicas.EraseObjectParts(objectBucket, objectKey)
+	if err != nil {
+		w.Header().Add(ServiceErrorHeader, "can't erase object")
+		w.Header().Add(ServiceErrorContentHeader, err.Error())
+		w.WriteHeader(500)
+		logs.MainLogger.Println(err)
+		return
+	}
+}
+
 func doMeta(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("do meta request...")
 
@@ -240,6 +275,7 @@ func runRestServer() {
 	router.Post("/shard-manager/object/part/upload", doUpload)
 	router.Post("/shard-manager/object/part/download", doDownload)
 	router.Post("/shard-manager/object/meta", doMeta)
+	router.Post("/shard-manager/object/erase", doErase)
 
 	rest.NewHttpServer(
 		fmt.Sprintf("%s:%s", targetServiceAddr, targetServicePort),

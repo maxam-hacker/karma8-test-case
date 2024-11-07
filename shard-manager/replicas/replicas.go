@@ -119,6 +119,24 @@ func ReadObjectPart(objectBucket string, objectKey string, totalObjectOffset uin
 	return nil, ErrObjectPartReading
 }
 
+func EraseObjectParts(objectBucket string, objectKey string) error {
+	for _, replica := range replicas {
+		err := replica.DeleteKey(objectBucket, objectKey)
+		if err != nil {
+			replica.LastError = err
+			continue
+		}
+	}
+
+	for _, replica := range replicas {
+		if replica.LastError == oneReplica.ErrObjectKeyFolder {
+			return ErrObjectIsNotPresent
+		}
+	}
+
+	return nil
+}
+
 func deleteReplicas() {
 	for _, replica := range replicas {
 		replica.DeleteReplica()

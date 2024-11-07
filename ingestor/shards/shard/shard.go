@@ -26,6 +26,7 @@ type Shard struct {
 	DownloadUrl string
 	UploadUrl   string
 	MetaUrl     string
+	EraseUrl    string
 }
 
 func New(opts ShardOptions) *Shard {
@@ -35,6 +36,7 @@ func New(opts ShardOptions) *Shard {
 		DownloadUrl: fmt.Sprintf("http://%s:%d/shard-manager/object/part/download", opts.IP, opts.Port),
 		UploadUrl:   fmt.Sprintf("http://%s:%d/shard-manager/object/part/upload", opts.IP, opts.Port),
 		MetaUrl:     fmt.Sprintf("http://%s:%d/shard-manager/object/meta", opts.IP, opts.Port),
+		EraseUrl:    fmt.Sprintf("http://%s:%d/shard-manager/object/erase", opts.IP, opts.Port),
 	}
 
 	return shard
@@ -153,6 +155,26 @@ func (shard *Shard) uploadPart(objectPart internalTypes.ObjectPart) error {
 	}
 
 	logs.ShardLogger.Println(response.StatusCode)
+
+	return nil
+}
+
+func (shard *Shard) EraseObjectParts(bucket string, key string) error {
+	httpClient := &http.Client{}
+
+	request, err := http.NewRequest("POST", shard.EraseUrl, nil)
+	if err != nil {
+		logs.ShardLogger.Println(err)
+		return err
+	}
+	request.Header.Set("X-Karma8-Object-Bucket", bucket)
+	request.Header.Set("X-Karma8-Object-Key", key)
+
+	_, err = httpClient.Do(request)
+	if err != nil {
+		logs.ShardLogger.Println(err)
+		return err
+	}
 
 	return nil
 }
