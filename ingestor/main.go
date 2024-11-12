@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -40,6 +41,7 @@ var (
 // @Success		200
 // @Router		/ingestor/file/upload [post]
 func doUpload(w http.ResponseWriter, r *http.Request) {
+
 	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
 	if err != nil {
 		w.Header().Add(ServiceErrorHeader, "can't get object bucket name")
@@ -72,10 +74,8 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("key", objectKey)
 	logs.MainLogger.Println("total size", objectTotalSize)
 
-	bytesBuffer := make([]byte, 16*1024)
-
 	totalSizeProcessed := 0
-
+	bytesBuffer := make([]byte, 16*1024)
 	partIdx := uint16(0)
 	totalOffset := 0
 	partDataBuffer := make([]byte, 0)
@@ -83,25 +83,133 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 
 	controller := http.NewResponseController(w)
 
-	for doRead {
-		controller.SetReadDeadline(time.Now().Add(5 * time.Second))
-
-		n, err := r.Body.Read(bytesBuffer)
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "multipart/form-data") {
+		err = r.ParseMultipartForm(160 * 1024 * 1024)
 		if err != nil {
-			if err == io.EOF {
-				doRead = false
-			} else {
-				shards.EraseParts(objectBucket, objectKey)
-				w.Header().Add(ServiceErrorHeader, "error while reading file")
-				w.Header().Add(ServiceErrorContentHeader, err.Error())
-				w.WriteHeader(500)
-				logs.MainLogger.Println(err)
-				return
+			w.Header().Add(ServiceErrorHeader, "error while parsing file")
+			w.Header().Add(ServiceErrorContentHeader, err.Error())
+			w.WriteHeader(500)
+			logs.MainLogger.Println(err)
+			return
+		}
+
+		for _, partFileHeaders := range r.MultipartForm.File {
+			for _, fileHeader := range partFileHeaders {
+				file, err := fileHeader.Open()
+				if err != nil {
+					logs.MainLogger.Println(err)
+					continue
+				}
+
+				for doRead {
+					controller.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+					n, err := file.Read(bytesBuffer)
+					if err != nil {
+						if err == io.EOF {
+							doRead = false
+						} else {
+							shards.EraseParts(objectBucket, objectKey)
+							w.Header().Add(ServiceErrorHeader, "error while reading file")
+							w.Header().Add(ServiceErrorContentHeader, err.Error())
+							w.WriteHeader(500)
+							logs.MainLogger.Println(err)
+							return
+						}
+					}
+
+					partDataBuffer = append(partDataBuffer, bytesBuffer[0:n]...)
+					if len(partDataBuffer) >= ObjectPartSize {
+						err = shards.UploadPart(internalTypes.ObjectPart{
+							Bucket:            objectBucket,
+							Key:               objectKey,
+							Data:              &partDataBuffer,
+							PartDataSize:      uint64(len(partDataBuffer)),
+							TotalObjectOffset: uint64(totalOffset),
+							TotalObjectSize:   objectTotalSize,
+						}, partIdx)
+						if err != nil {
+							shards.EraseParts(objectBucket, objectKey)
+							w.Header().Add(ServiceErrorHeader, "error while uploading file part")
+							w.Header().Add(ServiceErrorContentHeader, err.Error())
+							w.WriteHeader(500)
+							return
+						}
+
+						totalOffset += len(partDataBuffer)
+						partDataBuffer = make([]byte, 0)
+						partIdx++
+					}
+
+					totalSizeProcessed += n
+				}
+
+				if len(partDataBuffer) > 0 {
+					err = shards.UploadPart(internalTypes.ObjectPart{
+						Bucket:            objectBucket,
+						Key:               objectKey,
+						Data:              &partDataBuffer,
+						PartDataSize:      uint64(len(partDataBuffer)),
+						TotalObjectOffset: uint64(totalOffset),
+						TotalObjectSize:   objectTotalSize,
+					}, partIdx)
+					if err != nil {
+						shards.EraseParts(objectBucket, objectKey)
+						w.Header().Add(ServiceErrorHeader, "error while uploading file part")
+						w.Header().Add(ServiceErrorContentHeader, err.Error())
+						w.WriteHeader(500)
+						return
+					}
+				}
 			}
 		}
 
-		partDataBuffer = append(partDataBuffer, bytesBuffer[0:n]...)
-		if len(partDataBuffer) >= ObjectPartSize {
+	} else if strings.Contains(contentType, "octet-stream") {
+		for doRead {
+			controller.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+			n, err := r.Body.Read(bytesBuffer)
+			if err != nil {
+				if err == io.EOF {
+					doRead = false
+				} else {
+					shards.EraseParts(objectBucket, objectKey)
+					w.Header().Add(ServiceErrorHeader, "error while reading file")
+					w.Header().Add(ServiceErrorContentHeader, err.Error())
+					w.WriteHeader(500)
+					logs.MainLogger.Println(err)
+					return
+				}
+			}
+
+			partDataBuffer = append(partDataBuffer, bytesBuffer[0:n]...)
+			if len(partDataBuffer) >= ObjectPartSize {
+				err = shards.UploadPart(internalTypes.ObjectPart{
+					Bucket:            objectBucket,
+					Key:               objectKey,
+					Data:              &partDataBuffer,
+					PartDataSize:      uint64(len(partDataBuffer)),
+					TotalObjectOffset: uint64(totalOffset),
+					TotalObjectSize:   objectTotalSize,
+				}, partIdx)
+				if err != nil {
+					shards.EraseParts(objectBucket, objectKey)
+					w.Header().Add(ServiceErrorHeader, "error while uploading file part")
+					w.Header().Add(ServiceErrorContentHeader, err.Error())
+					w.WriteHeader(500)
+					return
+				}
+
+				totalOffset += len(partDataBuffer)
+				partDataBuffer = make([]byte, 0)
+				partIdx++
+			}
+
+			totalSizeProcessed += n
+		}
+
+		if len(partDataBuffer) > 0 {
 			err = shards.UploadPart(internalTypes.ObjectPart{
 				Bucket:            objectBucket,
 				Key:               objectKey,
@@ -117,30 +225,6 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(500)
 				return
 			}
-
-			totalOffset += len(partDataBuffer)
-			partDataBuffer = make([]byte, 0)
-			partIdx++
-		}
-
-		totalSizeProcessed += n
-	}
-
-	if len(partDataBuffer) > 0 {
-		err = shards.UploadPart(internalTypes.ObjectPart{
-			Bucket:            objectBucket,
-			Key:               objectKey,
-			Data:              &partDataBuffer,
-			PartDataSize:      uint64(len(partDataBuffer)),
-			TotalObjectOffset: uint64(totalOffset),
-			TotalObjectSize:   objectTotalSize,
-		}, partIdx)
-		if err != nil {
-			shards.EraseParts(objectBucket, objectKey)
-			w.Header().Add(ServiceErrorHeader, "error while uploading file part")
-			w.Header().Add(ServiceErrorContentHeader, err.Error())
-			w.WriteHeader(500)
-			return
 		}
 	}
 
