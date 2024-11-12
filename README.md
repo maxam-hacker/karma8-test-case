@@ -26,6 +26,6 @@ After the system started up it is availabale swagger page for Ingerstor service 
 
 By default:
 
-    ```
+```
     http://127.0.0.1:7788/swagger/index.html
-    ```
+```
