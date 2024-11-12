@@ -41,7 +41,6 @@ var (
 // @Success		200
 // @Router		/ingestor/file/upload [post]
 func doUpload(w http.ResponseWriter, r *http.Request) {
-
 	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
 	if err != nil {
 		w.Header().Add(ServiceErrorHeader, "can't get object bucket name")
