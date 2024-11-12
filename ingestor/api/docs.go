@@ -79,8 +79,15 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Total size of target file",
-                        "name": "X-Karma8-Object-Key",
+                        "name": "X-Karma8-Object-Total-Size",
                         "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Target file",
+                        "name": "file",
+                        "in": "formData",
                         "required": true
                     }
                 ],

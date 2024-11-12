@@ -51,9 +51,14 @@ paths:
         type: string
       - description: Total size of target file
         in: header
-        name: X-Karma8-Object-Key
+        name: X-Karma8-Object-Total-Size
         required: true
         type: string
+      - description: Target file
+        in: formData
+        name: file
+        required: true
+        type: file
       responses:
         "200":
           description: OK

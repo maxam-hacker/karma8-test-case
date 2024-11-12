@@ -33,12 +33,15 @@ var (
 //
 // @Description	Upload file with bucket name and key value
 // @Accept		octet-stream
-// @Param		X-Karma8-Object-Bucket	header	string true	"Bucket name for target file"
-// @Param		X-Karma8-Object-Key		header	string true	"Key value for target file"
-// @Param		X-Karma8-Object-Key		header	string true	"Total size of target file"
+// @Param		X-Karma8-Object-Bucket			header			string 	true	"Bucket name for target file"
+// @Param		X-Karma8-Object-Key				header			string 	true	"Key value for target file"
+// @Param		X-Karma8-Object-Total-Size		header			string 	true	"Total size of target file"
+// @Param		file							formData		file	true	"Target file"
 // @Success		200
 // @Router		/ingestor/file/upload [post]
 func doUpload(w http.ResponseWriter, r *http.Request) {
+	logs.MainLogger.Println("uploading...")
+
 	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
 	if err != nil {
 		w.Header().Add(ServiceErrorHeader, "can't get object bucket name")
@@ -229,9 +232,17 @@ func runRestServer() {
 		swaggerUrl := fmt.Sprintf("http://%s:%s/swagger/doc.json", targetServiceAddr, targetServicePort)
 
 		router.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   []string{"https://*", "http://*"},
-			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Access-Control-Allow-*"},
+			AllowedOrigins: []string{"https://*", "http://*", "http://0.0.0.0:7788"},
+			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders: []string{
+				"*",
+				"Accept",
+				"Authorization",
+				"Content-Type",
+				"X-CSRF-Token",
+				"Access-Control-Allow-*",
+				"Access-Control-Allow-Origin",
+			},
 			ExposedHeaders:   []string{"Link"},
 			AllowCredentials: false,
 			MaxAge:           300,
