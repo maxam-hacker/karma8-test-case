@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
+	"github.com/go-chi/cors"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 
+	_ "karma8-storage/ingestor/api"
 	"karma8-storage/ingestor/logs"
 	"karma8-storage/ingestor/shards"
 	"karma8-storage/internals/rest"
@@ -22,8 +25,19 @@ var (
 	ServiceErrorHeader        = "X-Karma8-Ingestor-Service-Error"
 	ServiceErrorContentHeader = "X-Karma8-Ingestor-Service-Error-Content"
 	ObjectPartSize            = 10 * 1024 * 1024
+
+	debugService string
 )
 
+// @Summary		Upload file
+//
+// @Description	Upload file with bucket name and key value
+// @Accept		octet-stream
+// @Param		X-Karma8-Object-Bucket	header	string true	"Bucket name for target file"
+// @Param		X-Karma8-Object-Key		header	string true	"Key value for target file"
+// @Param		X-Karma8-Object-Key		header	string true	"Total size of target file"
+// @Success		200
+// @Router		/ingestor/file/upload [post]
 func doUpload(w http.ResponseWriter, r *http.Request) {
 	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
 	if err != nil {
@@ -132,6 +146,14 @@ func doUpload(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("done", totalSizeProcessed)
 }
 
+// @Summary		Download file
+//
+// @Description	Download file by bucket name and key value
+// @Produce		octet-stream
+// @Param		X-Karma8-Object-Bucket	header	string true	"Bucket name for target file"
+// @Param		X-Karma8-Object-Key		header	string true	"Key value for target file"
+// @Success		200
+// @Router		/ingestor/file/download [post]
 func doDownload(w http.ResponseWriter, r *http.Request) {
 	objectBucket, err := internalUtils.ObjectBucketGetAndValidate(r)
 	if err != nil {
@@ -181,6 +203,20 @@ func doDownload(w http.ResponseWriter, r *http.Request) {
 	logs.MainLogger.Println("done", totalSizeProcessed)
 }
 
+// @title API
+// @version 1.0
+// @description Ingestor (Karma8 Test Case)
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host 127.0.0.1:7788
+// @BasePath /
 func runRestServer() {
 	logs.MainLogger.Println("REST server...")
 
@@ -188,6 +224,54 @@ func runRestServer() {
 	targetServicePort := os.Getenv("INGESTOR_SERVICE_PORT")
 
 	router := chi.NewRouter()
+
+	if debugService == "yes" {
+		swaggerUrl := fmt.Sprintf("http://%s:%s/swagger/doc.json", targetServiceAddr, targetServicePort)
+
+		router.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   []string{"https://*", "http://*"},
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Access-Control-Allow-*"},
+			ExposedHeaders:   []string{"Link"},
+			AllowCredentials: false,
+			MaxAge:           300,
+		}))
+
+		router.Get("/swagger/*", httpSwagger.Handler(
+			httpSwagger.URL(swaggerUrl),
+			httpSwagger.BeforeScript(`const UrlMutatorPlugin = (system) => ({
+			rootInjects: {
+			  setScheme: (scheme) => {
+				const jsonSpec = system.getState().toJSON().spec.json;
+				const schemes = Array.isArray(scheme) ? scheme : [scheme];
+				const newJsonSpec = Object.assign({}, jsonSpec, { schemes });
+		  
+				return system.specActions.updateJsonSpec(newJsonSpec);
+			  },
+			  setHost: (host) => {
+				const jsonSpec = system.getState().toJSON().spec.json;
+				const newJsonSpec = Object.assign({}, jsonSpec, { host });
+		  
+				return system.specActions.updateJsonSpec(newJsonSpec);
+			  },
+			  setBasePath: (basePath) => {
+				const jsonSpec = system.getState().toJSON().spec.json;
+				const newJsonSpec = Object.assign({}, jsonSpec, { basePath });
+		  
+				return system.specActions.updateJsonSpec(newJsonSpec);
+			  }
+			}
+		  });`),
+			httpSwagger.Plugins([]string{"UrlMutatorPlugin"}),
+			httpSwagger.UIConfig(map[string]string{
+				"onComplete": fmt.Sprintf(`() => {
+    									window.ui.setScheme('%s');
+    									window.ui.setHost('%s');
+    									window.ui.setBasePath('%s');
+  			}`, "http", targetServiceAddr+":"+targetServicePort, "/"),
+			}),
+		))
+	}
 
 	router.Post("/ingestor/file/upload", doUpload)
 	router.Post("/ingestor/file/download", doDownload)

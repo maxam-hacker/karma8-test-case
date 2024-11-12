@@ -4,7 +4,7 @@ WORKDIR /src/karma8-storage
 
 COPY . .
 
-RUN cd ./ingestor && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ingestor
+RUN cd ./ingestor && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-X main.debugService=yes" -o ingestor
 
 #Second, after fixing the paths inaccuracies in the Dockerfile, you run into a more subtle problem, 
 #when trying to run the go binary: not found, because the the golang builder image is using 
