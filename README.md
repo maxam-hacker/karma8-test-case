@@ -19,3 +19,13 @@ cd ./tester && go build
 ```
 diff path/to/uploaded/file path/to/stored/file
 ```
+
+### or use swagger interface for Ingestor service
+
+After the system started up it is availabale swagger page for Ingerstor service on your local machine.
+
+By default:
+
+    ```
+    http://127.0.0.1:7788/swagger/index.html
+    ```
