@@ -2,12 +2,16 @@ module karma8-storage/ingestor
 
 go 1.21
 
-replace karma8-storage/internals => ../internals
+replace (
+	karma8-storage/api => ../api
+	karma8-storage/internals => ../internals
+)
 
 require (
 	github.com/go-chi/chi v4.1.0+incompatible
 	github.com/go-chi/cors v1.2.1
 	github.com/stretchr/testify v1.8.1
+	karma8-storage/api v0.0.0-00010101000000-000000000000
 	karma8-storage/internals v1.0.0
 )
 
@@ -22,7 +26,7 @@ require (
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/swaggo/http-swagger/v2 v2.0.2
-	github.com/swaggo/swag v1.8.1
+	github.com/swaggo/swag v1.8.1 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

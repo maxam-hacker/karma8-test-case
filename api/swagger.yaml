@@ -1,0 +1,66 @@
+basePath: /
+host: 127.0.0.1:7788
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: Ingestor (Karma8 Test Case)
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: API
+  version: "1.0"
+paths:
+  /ingestor/file/download:
+    post:
+      description: Download file by bucket name and key value
+      parameters:
+      - description: Bucket name for target file
+        in: header
+        name: X-Karma8-Object-Bucket
+        required: true
+        type: string
+      - description: Key value for target file
+        in: header
+        name: X-Karma8-Object-Key
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+      summary: Download file
+  /ingestor/file/upload:
+    post:
+      consumes:
+      - application/octet-stream
+      description: Upload file with bucket name and key value
+      parameters:
+      - description: Bucket name for target file
+        in: header
+        name: X-Karma8-Object-Bucket
+        required: true
+        type: string
+      - description: Key value for target file
+        in: header
+        name: X-Karma8-Object-Key
+        required: true
+        type: string
+      - description: Total size of target file
+        in: header
+        name: X-Karma8-Object-Total-Size
+        required: true
+        type: string
+      - description: Target file
+        in: formData
+        name: file
+        required: true
+        type: file
+      responses:
+        "200":
+          description: OK
+      summary: Upload file
+swagger: "2.0"

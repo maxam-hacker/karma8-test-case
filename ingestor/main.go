@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/cors"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
-	_ "karma8-storage/ingestor/api"
+	_ "karma8-storage/api"
 	"karma8-storage/ingestor/logs"
 	"karma8-storage/ingestor/shards"
 	"karma8-storage/internals/rest"
